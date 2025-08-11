@@ -8,7 +8,9 @@
     "generate-icons": "node scripts/generate-icons.js",
     "validate": "node scripts/build.js",
     "dev": "echo 'Load the extension in Chrome developer mode from this directory'",
-    "package": "echo 'Use Chrome extension packaging tools or web store developer dashboard'"
+    "package": "node scripts/package.js",
+    "package:zip": "node scripts/package.js --format=zip",
+    "package:crx": "node scripts/package.js --format=crx"
   },
   "keywords": [
     "chrome-extension",

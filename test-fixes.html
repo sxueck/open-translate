@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Page for Open Translate Fixes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        .error-test {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        .success-test {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .instructions {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Open Translate Extension - Error Fixes Test Page</h1>
+    
+    <div class="instructions">
+        <h3>测试说明 (Test Instructions)</h3>
+        <p>这个页面用于测试Open Translate扩展的错误修复。请按照以下步骤进行测试：</p>
+        <ol>
+            <li>确保Open Translate扩展已安装并启用</li>
+            <li>打开浏览器开发者工具 (F12) 查看控制台</li>
+            <li>点击扩展图标打开popup</li>
+            <li>尝试翻译此页面</li>
+            <li>检查是否还有之前的错误信息</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>English Content for Translation</h2>
+        <p>This is a test paragraph in English that should be translatable by the Open Translate extension. The extension should be able to detect and translate this content without throwing the previous errors.</p>
+        
+        <p>Here are some common scenarios that previously caused errors:</p>
+        <ul>
+            <li>Network connectivity issues</li>
+            <li>API key configuration problems</li>
+            <li>Extension context invalidation</li>
+            <li>Content script communication failures</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Technical Content</h2>
+        <p>This section contains technical terms that should be handled properly:</p>
+        <ul>
+            <li><code>errorHandler</code> function definition</li>
+            <li><code>extensionState</code> variable initialization</li>
+            <li><code>chrome.runtime</code> API calls</li>
+            <li><code>Failed to fetch</code> network errors</li>
+            <li><code>Extension context invalidated</code> errors</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Mixed Language Content</h2>
+        <p>This paragraph contains both English and 中文 content to test the translation engine's ability to handle mixed languages properly.</p>
+        <p>The extension should handle this content gracefully without throwing errors like "No translatable text found on this page".</p>
+    </div>
+
+    <div class="test-section error-test">
+        <h2>Error Scenarios to Test</h2>
+        <p>The following errors should no longer appear in the console:</p>
+        <ul>
+            <li>❌ <code>Uncaught (in promise) ReferenceError: errorHandler is not defined</code></li>
+            <li>❌ <code>Background message handling failed: ReferenceError: extensionState is not defined</code></li>
+            <li>❌ <code>Uncaught Error: Extension context invalidated</code></li>
+            <li>❌ <code>Translation failed: Error: No translatable text found on this page</code></li>
+        </ul>
+    </div>
+
+    <div class="test-section success-test">
+        <h2>Expected Behavior</h2>
+        <p>After the fixes, you should see:</p>
+        <ul>
+            <li>✅ No undefined variable errors in console</li>
+            <li>✅ Proper error handling with user-friendly messages</li>
+            <li>✅ Graceful handling of extension context invalidation</li>
+            <li>✅ Better error messages for translation failures</li>
+            <li>✅ Improved network error handling</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Additional Test Content</h2>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+        
+        <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+        
+        <blockquote>
+            "The best error message is the one that never shows up." - Thomas Fuchs
+        </blockquote>
+    </div>
+
+    <script>
+        // Test script to verify extension context
+        console.log('Test page loaded');
+        
+        // Check if extension is available
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+            console.log('Chrome extension API available');
+        } else {
+            console.log('Chrome extension API not available');
+        }
+        
+        // Add some dynamic content to test content observer
+        setTimeout(() => {
+            const dynamicDiv = document.createElement('div');
+            dynamicDiv.className = 'test-section';
+            dynamicDiv.innerHTML = '<h2>Dynamic Content</h2><p>This content was added dynamically to test the content observer functionality.</p>';
+            document.body.appendChild(dynamicDiv);
+            console.log('Dynamic content added');
+        }, 2000);
+    </script>
+</body>
+</html>

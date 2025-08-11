@@ -1,0 +1,110 @@
+name: CI Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        else
+          npm install
+        fi
+        
+    - name: Run build validation
+      run: npm run build
+      
+    - name: Generate test icons
+      run: npm run generate-icons
+      
+    - name: Validate extension structure
+      run: |
+        echo "Validating extension structure..."
+        
+        # Check required files exist
+        required_files=(
+          "manifest.json"
+          "src/background/background.js"
+          "src/content/content.js"
+          "src/popup/popup.html"
+          "src/options/options.html"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "Error: Required file $file not found"
+            exit 1
+          else
+            echo "✓ $file"
+          fi
+        done
+        
+        # Check manifest.json validity
+        if ! jq empty manifest.json 2>/dev/null; then
+          echo "Error: manifest.json is not valid JSON"
+          exit 1
+        else
+          echo "✓ manifest.json is valid JSON"
+        fi
+        
+        # Check version consistency
+        manifest_version=$(jq -r '.version' manifest.json)
+        package_version=$(jq -r '.version' package.json)
+        
+        if [ "$manifest_version" != "$package_version" ]; then
+          echo "Warning: Version mismatch between manifest.json ($manifest_version) and package.json ($package_version)"
+        else
+          echo "✓ Version consistency: $manifest_version"
+        fi
+        
+    - name: Test icon generation
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y inkscape
+        
+        # Test PNG generation from SVG
+        for size in 16 32 48 128; do
+          if [ -f "assets/icons/icon${size}.svg" ]; then
+            inkscape -w ${size} -h ${size} "assets/icons/icon${size}.svg" -o "test-icon${size}.png"
+            if [ -f "test-icon${size}.png" ]; then
+              echo "✓ Successfully generated test PNG icon for size ${size}"
+              rm "test-icon${size}.png"
+            else
+              echo "Error: Failed to generate PNG icon for size ${size}"
+              exit 1
+            fi
+          fi
+        done
+        
+    - name: Create test package
+      run: |
+        mkdir -p test-package
+        cp manifest.json test-package/
+        cp -r src test-package/
+        cp -r assets test-package/
+        
+        echo "Test package created successfully"
+        
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-build
+        path: test-package/
+        retention-days: 7

@@ -12,6 +12,8 @@ importScripts(
   '/src/shared/stateManager.js'
 );
 
+let extensionState = null;
+
 /**
  * Initialize background script
  */
@@ -19,6 +21,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('Open Translate extension installed/updated');
 
   try {
+    extensionState = {
+      activeTranslations: new Map(),
+      selectedText: ''
+    };
+
     await stateManager.initialize();
 
     if (details.reason === 'install') {
@@ -151,6 +158,11 @@ async function handleTranslatePage(tab) {
  * Handle selection translation
  */
 async function handleTranslateSelection(selectionText, tab) {
+  // Store selected text for future use
+  if (extensionState) {
+    extensionState.selectedText = selectionText;
+  }
+
   // For now, translate the whole page when selection is clicked
   // Future enhancement: implement selection-specific translation
   await handleTranslatePage(tab);
@@ -194,10 +206,18 @@ async function handleModeSwitch(mode, tab) {
     chrome.contextMenus.update('mode-bilingual', { checked: mode === 'bilingual' });
     
     // Send mode change to content script
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      action: 'switchMode',
-      mode: mode
-    });
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'switchMode',
+        mode: mode
+      });
+
+      if (!response || !response.success) {
+        console.warn('Mode switch message failed:', response?.error);
+      }
+    } catch (error) {
+      console.warn('Failed to send mode switch message:', error);
+    }
     
 
   } catch (error) {
@@ -210,6 +230,14 @@ async function handleModeSwitch(mode, tab) {
  * Handle messages from content scripts and popup
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Ensure extensionState is initialized
+  if (!extensionState) {
+    extensionState = {
+      activeTranslations: new Map(),
+      selectedText: ''
+    };
+  }
+
   handleBackgroundMessage(message, sender, sendResponse);
   return true; // Keep message channel open
 });

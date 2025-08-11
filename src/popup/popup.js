@@ -31,22 +31,31 @@ async function initialize() {
   try {
     // Get DOM elements
     initializeElements();
-    
+
     // Get current tab
     currentTab = await getCurrentTab();
-    
+
     // Load user preferences
     await loadPreferences();
-    
+
     // Set up event listeners
     setupEventListeners();
-    
+
     // Update UI based on current state
     await updateUIState();
-    
+
     console.log('Popup initialized successfully');
   } catch (error) {
     console.error('Failed to initialize popup:', error);
+
+    // Use errorHandler if available, otherwise fallback to simple error display
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'popup-initialization', {
+        logToConsole: true,
+        suppressNotification: true
+      });
+    }
+
     showError('Failed to initialize extension');
   }
 }
@@ -140,6 +149,11 @@ function setupEventListeners() {
  */
 async function updateUIState() {
   try {
+    // Check if extension context is still valid
+    if (!chrome.runtime || !chrome.runtime.id) {
+      throw new Error('Extension context invalidated');
+    }
+
     // Get translation status from content script
     const response = await chrome.tabs.sendMessage(currentTab.id, {
       action: 'getStatus'
@@ -159,10 +173,24 @@ async function updateUIState() {
       updateButtonStates();
     }
   } catch (error) {
-    // Content script not available (e.g., on chrome:// pages)
-    setStatus('unavailable', 'Translation not available on this page');
-    elements.translateBtn.disabled = true;
-    elements.restoreBtn.disabled = true;
+    console.warn('Failed to get translation status:', error);
+
+    if (error.message && error.message.includes('Extension context invalidated')) {
+      setStatus('error', 'Extension needs to be reloaded');
+      elements.translateBtn.disabled = true;
+      elements.restoreBtn.disabled = true;
+    } else if (error.message && error.message.includes('Receiving end does not exist')) {
+      // Content script not available (e.g., on chrome:// pages)
+      setStatus('unavailable', 'Translation not available on this page');
+      elements.translateBtn.disabled = true;
+      elements.restoreBtn.disabled = true;
+    } else {
+      // Other errors - still allow translation attempt
+      setStatus('ready', 'Ready to translate');
+      isTranslated = false;
+      isTranslating = false;
+      updateButtonStates();
+    }
   }
 }
 
@@ -173,6 +201,11 @@ async function handleTranslate() {
   if (isTranslating) return;
 
   try {
+    // Check if extension context is still valid
+    if (!chrome.runtime || !chrome.runtime.id) {
+      throw new Error('Extension context invalidated. Please reload the extension.');
+    }
+
     isTranslating = true;
     showLoading(true);
     setStatus('translating', 'Translating page...');
@@ -197,8 +230,25 @@ async function handleTranslate() {
   } catch (error) {
     console.error('Translation failed:', error);
     isTranslating = false;
-    setStatus('error', error.message || 'Translation failed');
-    showError(error.message || 'Translation failed');
+
+    // Use errorHandler if available
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'popup-translation', {
+        logToConsole: true,
+        suppressNotification: true
+      });
+    }
+
+    // Provide more specific error messages
+    let errorMessage = error.message || 'Translation failed';
+    if (error.message && error.message.includes('Extension context invalidated')) {
+      errorMessage = 'Extension needs to be reloaded. Please reload the extension and try again.';
+    } else if (error.message && error.message.includes('Receiving end does not exist')) {
+      errorMessage = 'Content script not available. Please refresh the page and try again.';
+    }
+
+    setStatus('error', errorMessage);
+    showError(errorMessage);
     updateButtonStates();
   } finally {
     showLoading(false);
@@ -210,6 +260,11 @@ async function handleTranslate() {
  */
 async function handleRestore() {
   try {
+    // Check if extension context is still valid
+    if (!chrome.runtime || !chrome.runtime.id) {
+      throw new Error('Extension context invalidated. Please reload the extension.');
+    }
+
     showLoading(true);
     setStatus('restoring', 'Restoring original text...');
 
@@ -228,8 +283,25 @@ async function handleRestore() {
   } catch (error) {
     console.error('Restore failed:', error);
     isTranslating = false;
-    setStatus('error', error.message || 'Restore failed');
-    showError(error.message || 'Restore failed');
+
+    // Use errorHandler if available
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'popup-restore', {
+        logToConsole: true,
+        suppressNotification: true
+      });
+    }
+
+    // Provide more specific error messages
+    let errorMessage = error.message || 'Restore failed';
+    if (error.message && error.message.includes('Extension context invalidated')) {
+      errorMessage = 'Extension needs to be reloaded. Please reload the extension and try again.';
+    } else if (error.message && error.message.includes('Receiving end does not exist')) {
+      errorMessage = 'Content script not available. Please refresh the page and try again.';
+    }
+
+    setStatus('error', errorMessage);
+    showError(errorMessage);
     updateButtonStates();
   } finally {
     showLoading(false);

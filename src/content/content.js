@@ -24,12 +24,20 @@ async function initialize() {
     translationService = new TranslationService();
     await translationService.initialize();
     await loadUserPreferences();
-    setupMessageListeners();    
+    setupMessageListeners();
     setupContextMenu();
-    
+
     console.log('Open Translate content script initialized');
   } catch (error) {
     console.error('Failed to initialize Open Translate:', error);
+
+    // Use errorHandler if available
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'content-initialization', {
+        logToConsole: true,
+        suppressNotification: true
+      });
+    }
   }
 }
 
@@ -103,6 +111,15 @@ async function handleMessage(message, sender, sendResponse) {
     }
   } catch (error) {
     console.error('Error handling message:', error);
+
+    // Use errorHandler if available
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'content-message-handling', {
+        logToConsole: true,
+        suppressNotification: true
+      });
+    }
+
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -135,7 +152,12 @@ async function handleTranslateRequest(options = {}) {
       const paragraphGroups = textExtractor.extractParagraphGroups();
 
       if (paragraphGroups.length === 0) {
-        throw new Error('No translatable text found on this page');
+        // Check if page is still loading or has dynamic content
+        const hasText = document.body && document.body.textContent.trim().length > 0;
+        const errorMessage = hasText
+          ? 'No translatable text found on this page. The page may contain only images, videos, or non-text content.'
+          : 'Page appears to be empty or still loading. Please wait and try again.';
+        throw new Error(errorMessage);
       }
 
       // 重置翻译数据
@@ -210,7 +232,6 @@ async function handleTranslateRequest(options = {}) {
         }
       };
 
-      // 使用实时进度回调进行翻译
       const paragraphResults = await translationService.translateParagraphGroups(
         paragraphGroups,
         targetLanguage,
@@ -218,7 +239,6 @@ async function handleTranslateRequest(options = {}) {
         progressCallback
       );
 
-      // 确保所有结果都已处理（实际上在progressCallback中已经处理了）
       console.log(`Translation completed: ${paragraphResults.filter(r => r.success).length}/${paragraphResults.length} successful`);
     }
 
@@ -230,6 +250,15 @@ async function handleTranslateRequest(options = {}) {
 
   } catch (error) {
     console.error('Translation failed:', error);
+
+    // Use errorHandler if available
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'content-translation', {
+        logToConsole: true,
+        suppressNotification: false
+      });
+    }
+
     notifyStatusChange('error', error.message);
     throw error;
   } finally {
@@ -336,14 +365,31 @@ function setupLinkClickHandler() {
  * Notify popup/background about status changes
  */
 function notifyStatusChange(status, data = null) {
-  chrome.runtime.sendMessage({
-    action: 'statusUpdate',
-    status: status,
-    data: data,
-    url: window.location.href
-  }).catch(() => {
-    // Ignore errors if popup is not open
-  });
+  try {
+    // Check if extension context is still valid
+    if (!chrome.runtime || !chrome.runtime.sendMessage) {
+      console.warn('Extension context invalidated, cannot send status update');
+      return;
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'statusUpdate',
+      status: status,
+      data: data,
+      url: window.location.href
+    }).catch((error) => {
+      // Handle different types of errors
+      if (error.message && error.message.includes('Extension context invalidated')) {
+        console.warn('Extension context invalidated:', error);
+      } else if (error.message && error.message.includes('Receiving end does not exist')) {
+        console.warn('Background script not available:', error);
+      } else {
+        console.warn('Failed to send status update:', error);
+      }
+    });
+  } catch (error) {
+    console.warn('Error in notifyStatusChange:', error);
+  }
 }
 
 /**

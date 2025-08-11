@@ -118,7 +118,21 @@ class TranslationService {
       return this.extractTranslation(response);
     } catch (error) {
       console.error('Translation failed:', error);
-      throw error;
+
+      // Provide more specific error messages
+      if (error.name === 'AbortError') {
+        throw new Error('Translation request timed out. Please try again.');
+      } else if (error.message.includes('Failed to fetch')) {
+        throw new Error('Network error: Unable to connect to translation service. Please check your internet connection.');
+      } else if (error.message.includes('API request failed: 401')) {
+        throw new Error('API key is invalid or missing. Please check your settings.');
+      } else if (error.message.includes('API request failed: 429')) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+      } else if (error.message.includes('API request failed: 402')) {
+        throw new Error('API quota exceeded. Please check your account balance.');
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -283,13 +297,33 @@ Translation:`;
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+
+        // Try to get more detailed error information
+        try {
+          const errorData = await response.json();
+          if (errorData.error && errorData.error.message) {
+            errorMessage += ` - ${errorData.error.message}`;
+          }
+        } catch (parseError) {
+          // Ignore JSON parsing errors for error responses
+        }
+
+        throw new Error(errorMessage);
       }
 
       return await response.json();
     } catch (error) {
       clearTimeout(timeoutId);
-      throw error;
+
+      // Handle specific error types
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out');
+      } else if (error.message.includes('Failed to fetch')) {
+        throw new Error('Network error: Failed to fetch');
+      } else {
+        throw error;
+      }
     }
   }
 

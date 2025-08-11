@@ -1,0 +1,140 @@
+name: Build and Release CRX
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        else
+          npm install
+        fi
+        
+    - name: Run build validation
+      run: npm run build
+      
+    - name: Generate PNG icons from SVG
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y inkscape
+        
+        # Create PNG icons from SVG placeholders
+        for size in 16 32 48 128; do
+          if [ -f "assets/icons/icon${size}.svg" ]; then
+            inkscape -w ${size} -h ${size} "assets/icons/icon${size}.svg" -o "assets/icons/icon${size}.png"
+            echo "Generated icon${size}.png"
+          fi
+        done
+        
+    - name: Update manifest to use PNG icons
+      run: |
+        # Replace SVG references with PNG in manifest.json
+        sed -i 's/\.svg/\.png/g' manifest.json
+        echo "Updated manifest.json to use PNG icons"
+        
+    - name: Create extension package
+      run: |
+        # Create a clean directory for packaging
+        mkdir -p dist/extension
+        
+        # Copy all necessary files
+        cp manifest.json dist/extension/
+        cp -r src dist/extension/
+        cp -r assets dist/extension/
+        
+        # Remove any development files
+        find dist/extension -name "*.md" -delete
+        find dist/extension -name ".DS_Store" -delete
+        
+        echo "Extension package created in dist/extension"
+        
+    - name: Install Chrome for CRX packaging
+      run: |
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+    - name: Generate private key for CRX
+      run: |
+        # Generate a private key for signing the CRX
+        openssl genrsa -out extension.pem 2048
+        echo "Generated private key for CRX signing"
+        
+    - name: Package CRX
+      run: |
+        # Create CRX package using Chrome
+        google-chrome --headless --disable-gpu --pack-extension=dist/extension --pack-extension-key=extension.pem
+        
+        # Move the generated CRX to a predictable location
+        mv dist/extension.crx open-translate-${GITHUB_REF#refs/tags/}.crx
+        
+        echo "CRX package created: open-translate-${GITHUB_REF#refs/tags/}.crx"
+        
+    - name: Create ZIP package
+      run: |
+        cd dist/extension
+        zip -r ../../open-translate-${GITHUB_REF#refs/tags/}.zip .
+        cd ../..
+        echo "ZIP package created: open-translate-${GITHUB_REF#refs/tags/}.zip"
+        
+    - name: Generate release notes
+      run: |
+        echo "# Open Translate ${GITHUB_REF#refs/tags/}" > release-notes.md
+        echo "" >> release-notes.md
+        echo "## 安装说明" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### 方式一：直接安装 CRX 文件" >> release-notes.md
+        echo "1. 下载 \`open-translate-${GITHUB_REF#refs/tags/}.crx\` 文件" >> release-notes.md
+        echo "2. 打开 Chrome 浏览器，进入 \`chrome://extensions/\`" >> release-notes.md
+        echo "3. 启用右上角的「开发者模式」" >> release-notes.md
+        echo "4. 将 CRX 文件拖拽到扩展页面进行安装" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### 方式二：解压安装" >> release-notes.md
+        echo "1. 下载 \`open-translate-${GITHUB_REF#refs/tags/}.zip\` 文件并解压" >> release-notes.md
+        echo "2. 打开 Chrome 浏览器，进入 \`chrome://extensions/\`" >> release-notes.md
+        echo "3. 启用右上角的「开发者模式」" >> release-notes.md
+        echo "4. 点击「加载已解压的扩展程序」" >> release-notes.md
+        echo "5. 选择解压后的文件夹" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "## 配置说明" >> release-notes.md
+        echo "安装后请参考项目文档配置 API 设置。" >> release-notes.md
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          open-translate-*.crx
+          open-translate-*.zip
+        body_path: release-notes.md
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: extension-packages
+        path: |
+          open-translate-*.crx
+          open-translate-*.zip
+          extension.pem
+        retention-days: 30

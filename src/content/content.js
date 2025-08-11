@@ -1,0 +1,438 @@
+/**
+ * Content script for Open Translate extension
+ * Handles page translation and user interactions
+ */
+
+// Import core modules
+const textExtractor = new TextExtractor();
+const translationRenderer = new TranslationRenderer();
+let translationService = null;
+
+// State management
+let isTranslating = false;
+let isTranslated = false;
+let isNavigating = false; // 新增：标记是否正在导航
+let currentTextNodes = [];
+let currentTranslations = [];
+let translationMode = 'paragraph-bilingual';
+
+/**
+ * Initialize content script
+ */
+async function initialize() {
+  try {
+    translationService = new TranslationService();
+    await translationService.initialize();
+    await loadUserPreferences();
+    setupMessageListeners();    
+    setupContextMenu();
+    
+    console.log('Open Translate content script initialized');
+  } catch (error) {
+    console.error('Failed to initialize Open Translate:', error);
+  }
+}
+
+/**
+ * Load user preferences from storage
+ */
+async function loadUserPreferences() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['translationMode', 'targetLanguage', 'batchSize'], (result) => {
+      translationMode = result.translationMode || 'paragraph-bilingual';
+      translationRenderer.setMode(translationMode);
+
+      // Update translation service with batch size if available
+      if (result.batchSize && translationService) {
+        translationService.config.batchSize = result.batchSize;
+      }
+
+      resolve();
+    });
+  });
+}
+
+/**
+ * Set up message listeners for communication with popup/background
+ */
+function setupMessageListeners() {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    handleMessage(message, sender, sendResponse);
+    return true; // Keep message channel open for async responses
+  });
+}
+
+/**
+ * Handle messages from popup and background script
+ */
+async function handleMessage(message, sender, sendResponse) {
+  try {
+    switch (message.action) {
+      case 'translate':
+        await handleTranslateRequest(message.options);
+        sendResponse({ success: true, translated: isTranslated });
+        break;
+        
+      case 'restore':
+        await handleRestoreRequest();
+        sendResponse({ success: true, translated: isTranslated });
+        break;
+        
+      case 'switchMode':
+        await handleSwitchModeRequest(message.mode);
+        sendResponse({ success: true, mode: translationMode });
+        break;
+        
+      case 'getStatus':
+        sendResponse({
+          success: true,
+          isTranslated: isTranslated,
+          isTranslating: isTranslating,
+          mode: translationMode,
+          stats: translationRenderer.getTranslationStats()
+        });
+        break;
+        
+      case 'updateConfig':
+        await translationService.updateConfig(message.config);
+        sendResponse({ success: true });
+        break;
+        
+      default:
+        sendResponse({ success: false, error: 'Unknown action' });
+    }
+  } catch (error) {
+    console.error('Error handling message:', error);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
+/**
+ * Handle translation request
+ */
+async function handleTranslateRequest(options = {}) {
+  if (isTranslating) {
+    throw new Error('Translation already in progress');
+  }
+
+  // 检查是否正在导航，如果是则不进行翻译
+  if (isNavigating) {
+    throw new Error('Page is navigating, translation cancelled');
+  }
+
+  try {
+    isTranslating = true;
+
+    // Update status in popup
+    notifyStatusChange('translating');
+
+    const targetLanguage = options.targetLanguage || 'zh-CN';
+    const sourceLanguage = options.sourceLanguage || 'auto';
+
+    // Extract text nodes if not already done or if page changed
+    if (!isTranslated || options.forceRefresh) {
+      // Use paragraph-based extraction for better concurrent translation
+      const paragraphGroups = textExtractor.extractParagraphGroups();
+
+      if (paragraphGroups.length === 0) {
+        throw new Error('No translatable text found on this page');
+      }
+
+      // 重置翻译数据
+      currentTextNodes = [];
+      currentTranslations = [];
+
+      // 实时翻译进度回调函数
+      const progressCallback = async (result, completed, total) => {
+        try {
+          // 检查是否正在导航，如果是则停止翻译
+          if (isNavigating) {
+            console.log('Navigation detected, stopping translation');
+            return;
+          }
+
+          // 立即渲染单个翻译结果
+          translationRenderer.renderSingleResult(result, translationMode);
+
+          // 更新进度状态
+          const progress = Math.round((completed / total) * 100);
+
+          notifyStatusChange('translating', {
+            progress: progress,
+            completed: completed,
+            total: total,
+            currentText: result.originalText?.substring(0, 50) + '...'
+          });
+
+          // 存储翻译结果以便后续操作
+          if (result.success) {
+            result.textNodes.forEach((textNode, index) => {
+              currentTextNodes.push(textNode);
+
+              if (result.textNodes.length === 1) {
+                // Single text node in paragraph - use full translation
+                currentTranslations.push(result.translation);
+              } else {
+                // Multiple text nodes in paragraph - distribute translation proportionally
+                const nodeTextLength = textNode.text.length;
+                const totalTextLength = result.originalText.length;
+                const proportion = nodeTextLength / totalTextLength;
+
+                // Calculate position in translation based on text node position
+                let currentPosition = 0;
+                for (let i = 0; i < index; i++) {
+                  currentPosition += result.textNodes[i].text.length / totalTextLength;
+                }
+
+                const startPos = Math.floor(currentPosition * result.translation.length);
+                const endPos = Math.floor((currentPosition + proportion) * result.translation.length);
+
+                let nodeTranslation = result.translation.substring(startPos, endPos).trim();
+
+                // Ensure we have some translation text
+                if (!nodeTranslation) {
+                  nodeTranslation = result.translation;
+                }
+
+                currentTranslations.push(nodeTranslation);
+              }
+            });
+          } else {
+            // Handle failed translations - keep original text
+            result.textNodes.forEach(textNode => {
+              currentTextNodes.push(textNode);
+              currentTranslations.push(textNode.text);
+            });
+          }
+
+        } catch (renderError) {
+          console.error('Failed to render translation progress:', renderError);
+        }
+      };
+
+      // 使用实时进度回调进行翻译
+      const paragraphResults = await translationService.translateParagraphGroups(
+        paragraphGroups,
+        targetLanguage,
+        sourceLanguage,
+        progressCallback
+      );
+
+      // 确保所有结果都已处理（实际上在progressCallback中已经处理了）
+      console.log(`Translation completed: ${paragraphResults.filter(r => r.success).length}/${paragraphResults.length} successful`);
+    }
+
+    isTranslated = true;
+    notifyStatusChange('translated', {
+      totalTranslated: currentTranslations.length,
+      mode: translationMode
+    });
+
+  } catch (error) {
+    console.error('Translation failed:', error);
+    notifyStatusChange('error', error.message);
+    throw error;
+  } finally {
+    isTranslating = false;
+  }
+}
+
+/**
+ * Handle restore original text request
+ */
+async function handleRestoreRequest() {
+  try {
+    translationRenderer.restoreOriginalText();
+    isTranslated = false;
+    currentTranslations = [];
+    
+    notifyStatusChange('restored');
+  } catch (error) {
+    console.error('Restore failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle translation mode switch request
+ */
+async function handleSwitchModeRequest(newMode) {
+  if (!['replace', 'paragraph-bilingual'].includes(newMode)) {
+    throw new Error('Invalid translation mode');
+  }
+  
+  try {
+    translationMode = newMode;
+    translationRenderer.setMode(newMode);
+    
+    // Save preference
+    await chrome.storage.sync.set({ translationMode: newMode });
+    
+    // Re-render if already translated
+    if (isTranslated && currentTranslations.length > 0) {
+      if (newMode === 'paragraph-bilingual') {
+        // 段落级双语模式需要重新翻译以获取正确的段落组信息
+        await handleTranslateRequest({ forceRefresh: true });
+      } else {
+        await translationRenderer.switchMode(newMode, currentTextNodes, currentTranslations);
+      }
+    }
+    
+    notifyStatusChange('modeChanged', newMode);
+  } catch (error) {
+    console.error('Mode switch failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Set up context menu interactions and link click handling
+ */
+function setupContextMenu() {
+  // Handle text selection for targeted translation
+  document.addEventListener('mouseup', () => {
+    const selection = window.getSelection();
+    if (selection.toString().trim().length > 0) {
+      // Store selection for potential translation
+      chrome.runtime.sendMessage({
+        action: 'textSelected',
+        text: selection.toString().trim()
+      });
+    }
+  });
+
+  // 防止链接点击时进行二次翻译
+  setupLinkClickHandler();
+}
+
+/**
+ * 设置链接点击处理，防止二次翻译
+ */
+function setupLinkClickHandler() {
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+
+    // 检查是否点击了链接或链接内的元素
+    const link = target.closest('a[href]');
+    if (link && link.href) {
+      // 标记页面即将跳转，暂停翻译相关操作
+      isNavigating = true;
+
+      // 如果当前正在翻译，停止翻译
+      if (isTranslating) {
+        console.log('Link clicked during translation, stopping translation process');
+        isTranslating = false;
+      }
+
+      // 清理当前翻译状态，为新页面做准备
+      setTimeout(() => {
+        cleanup();
+      }, 100);
+    }
+  }, true); // 使用捕获阶段确保早期处理
+}
+
+/**
+ * Notify popup/background about status changes
+ */
+function notifyStatusChange(status, data = null) {
+  chrome.runtime.sendMessage({
+    action: 'statusUpdate',
+    status: status,
+    data: data,
+    url: window.location.href
+  }).catch(() => {
+    // Ignore errors if popup is not open
+  });
+}
+
+/**
+ * Handle dynamic content changes
+ */
+function setupContentObserver() {
+  const observer = translationRenderer.observeContentChanges(() => {
+    // Debounce content changes
+    clearTimeout(window.otContentChangeTimeout);
+    window.otContentChangeTimeout = setTimeout(() => {
+      if (isTranslated) {
+        // Re-translate new content
+        handleTranslateRequest({ forceRefresh: true }).catch(console.error);
+      }
+    }, 1000);
+  });
+  
+  return observer;
+}
+
+/**
+ * Clean up resources
+ */
+function cleanup() {
+  if (isTranslated) {
+    translationRenderer.restoreOriginalText();
+  }
+
+  // Clear timeouts
+  if (window.otContentChangeTimeout) {
+    clearTimeout(window.otContentChangeTimeout);
+  }
+
+  // Reset state
+  isTranslating = false;
+  isTranslated = false;
+  isNavigating = false;
+  currentTextNodes = [];
+  currentTranslations = [];
+}
+
+window.addEventListener('beforeunload', cleanup);
+window.addEventListener('pagehide', cleanup);
+
+// 监听页面导航开始
+window.addEventListener('beforeunload', () => {
+  isNavigating = true;
+  isTranslating = false;
+});
+
+// 监听历史记录变化（SPA导航）
+window.addEventListener('popstate', () => {
+  isNavigating = true;
+  setTimeout(() => {
+    isNavigating = false;
+    cleanup();
+  }, 500);
+});
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initialize);
+} else {
+  initialize();
+}
+
+// Set up content observer
+let contentObserver = null;
+window.addEventListener('load', () => {
+  contentObserver = setupContentObserver();
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // Page is hidden, pause any ongoing operations
+    if (isTranslating) {
+      console.log('Page hidden during translation');
+    }
+  } else {
+    // Page is visible again, reset navigation state
+    isNavigating = false;
+
+    if (isTranslated) {
+      // Verify translation state is still valid
+      const stats = translationRenderer.getTranslationStats();
+      if (stats.translatedElements === 0 && stats.bilingualContainers === 0) {
+        isTranslated = false;
+      }
+    }
+  }
+});

@@ -1,0 +1,65 @@
+{
+  "manifest_version": 3,
+  "name": "Open Translate",
+  "version": "1.0.0",
+  "description": "A powerful web page translation extension with OpenAI API compatibility",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "src/shared/constants.js",
+        "src/shared/utils.js",
+        "src/shared/config.js",
+        "src/shared/errorHandler.js",
+        "src/shared/stateManager.js",
+        "src/core/textExtractor.js",
+        "src/core/translationRenderer.js",
+        "src/core/translator.js",
+        "src/content/content.js"
+      ],
+      "css": [
+        "src/content/content.css"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Open Translate",
+    "default_icon": {
+      "16": "assets/icons/icon16.svg",
+      "32": "assets/icons/icon32.svg",
+      "48": "assets/icons/icon48.svg",
+      "128": "assets/icons/icon128.svg"
+    }
+  },
+  "options_page": "src/options/options.html",
+  "icons": {
+    "16": "assets/icons/icon16.svg",
+    "32": "assets/icons/icon32.svg",
+    "48": "assets/icons/icon48.svg",
+    "128": "assets/icons/icon128.svg"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/content.css",
+        "assets/icons/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "name": "open-translate",
+  "version": "1.0.0",
+  "description": "A powerful Chrome browser extension for web page translation with OpenAI API compatibility",
+  "main": "src/background/background.js",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "generate-icons": "node scripts/generate-icons.js",
+    "validate": "node scripts/build.js",
+    "dev": "echo 'Load the extension in Chrome developer mode from this directory'",
+    "package": "echo 'Use Chrome extension packaging tools or web store developer dashboard'"
+  },
+  "keywords": [
+    "chrome-extension",
+    "translation",
+    "openai",
+    "web-translation",
+    "browser-extension",
+    "multilingual"
+  ],
+  "author": "Open Translate Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/open-translate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/open-translate/issues"
+  },
+  "homepage": "https://github.com/your-username/open-translate#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {},
+  "dependencies": {},
+  "manifest": {
+    "version": 3,
+    "name": "Open Translate",
+    "description": "A powerful web page translation extension with OpenAI API compatibility"
+  },
+  "chrome-extension": {
+    "manifest_version": 3,
+    "permissions": [
+      "activeTab",
+      "storage",
+      "scripting",
+      "contextMenus"
+    ],
+    "host_permissions": [
+      "http://*/*",
+      "https://*/*"
+    ]
+  }
+}

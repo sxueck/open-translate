@@ -1,0 +1,352 @@
+/**
+ * Content script styles for Open Translate extension
+ * 使用高优先级选择器确保样式不被网站样式覆盖
+ */
+
+/* 重置和基础样式 - 使用高优先级 */
+.ot-bilingual-container,
+.ot-bilingual-container *,
+.ot-original-text,
+.ot-translated-text {
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+  text-decoration: inherit !important;
+  text-transform: inherit !important;
+  letter-spacing: inherit !important;
+  word-spacing: inherit !important;
+}
+
+/* Bilingual translation container styles */
+.ot-bilingual-container {
+  display: inline-block !important;
+  position: relative !important;
+  vertical-align: top !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  z-index: auto !important;
+  float: none !important;
+  clear: none !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: auto !important;
+  min-height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  transition: none !important;
+}
+
+/* Original text styling */
+.ot-original-text {
+  display: block !important;
+  opacity: 0.6 !important;
+  font-size: 0.9em !important;
+  line-height: 1.3 !important;
+  color: inherit !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  text-decoration: inherit !important;
+  white-space: inherit !important;
+  word-wrap: inherit !important;
+  overflow-wrap: inherit !important;
+  transition: none !important;
+}
+
+/* Translated text styling */
+.ot-translated-text {
+  display: block !important;
+  font-weight: normal !important;
+  line-height: 1.4 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  background: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  text-decoration: inherit !important;
+  white-space: inherit !important;
+  word-wrap: inherit !important;
+  overflow-wrap: inherit !important;
+  font-style: normal !important;
+  transition: none !important;
+}
+
+
+/* Special handling for different element types */
+h1 .ot-bilingual-container,
+h2 .ot-bilingual-container,
+h3 .ot-bilingual-container,
+h4 .ot-bilingual-container,
+h5 .ot-bilingual-container,
+h6 .ot-bilingual-container {
+  display: block;
+  margin-bottom: 0.2em;
+}
+
+h1 .ot-translated-text,
+h2 .ot-translated-text,
+h3 .ot-translated-text,
+h4 .ot-translated-text,
+h5 .ot-translated-text,
+h6 .ot-translated-text {
+  font-weight: inherit;
+  font-size: inherit;
+}
+
+/* Link styling preservation */
+a .ot-bilingual-container {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+a .ot-original-text,
+a .ot-translated-text {
+  color: inherit;
+}
+
+/* General font style preservation for all elements */
+.ot-bilingual-container {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-decoration: inherit;
+  color: inherit;
+}
+
+.ot-original-text,
+.ot-translated-text {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-decoration: inherit;
+  color: inherit;
+}
+
+/* Button and form element handling */
+button .ot-bilingual-container,
+input .ot-bilingual-container,
+textarea .ot-bilingual-container {
+  display: inline;
+}
+
+button .ot-original-text,
+button .ot-translated-text,
+input .ot-original-text,
+input .ot-translated-text,
+textarea .ot-original-text,
+textarea .ot-translated-text {
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Table cell handling */
+td .ot-bilingual-container,
+th .ot-bilingual-container {
+  display: block;
+  width: 100%;
+}
+
+/* List item handling */
+li .ot-bilingual-container {
+  display: inline-block;
+  width: 100%;
+}
+
+/* Code and pre element handling */
+code .ot-bilingual-container,
+pre .ot-bilingual-container {
+  display: block;
+  font-family: inherit;
+}
+
+code .ot-original-text,
+code .ot-translated-text,
+pre .ot-original-text,
+pre .ot-translated-text {
+  font-family: inherit;
+  font-size: inherit;
+  white-space: inherit;
+}
+
+/* Responsive design*/
+@media (max-width: 768px) {
+  .ot-bilingual-container {
+    display: block;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ot-original-text {
+    font-size: 0.85em;
+    line-height: 1.25;
+  }
+
+  .ot-translated-text {
+    line-height: 1.35;
+    font-size: 1em;
+  }
+}
+
+@media (max-width: 480px) {
+  .ot-bilingual-container {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .ot-original-text {
+    font-size: 0.85em;
+  }
+
+  .ot-translated-text {
+    font-size: 1em;
+  }
+}
+
+
+
+
+
+/* Print styles */
+@media print {
+  .ot-bilingual-container {
+    display: block;
+    page-break-inside: avoid;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ot-original-text {
+    opacity: 0.5;
+    font-size: 0.85em;
+  }
+
+  .ot-translated-text {
+    font-weight: normal;
+  }
+}
+
+/* Accessibility improvements */
+.ot-bilingual-container[aria-label] {
+  position: relative;
+}
+
+/* Special handling for RTL languages */
+[dir="rtl"] .ot-bilingual-container {
+  text-align: right;
+}
+
+/* Ensure proper text selection */
+.ot-original-text,
+.ot-translated-text {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* 特定网站兼容性处理 */
+
+/* Wikipedia 兼容性 */
+.mw-content-text .ot-bilingual-container {
+  font-family: inherit !important;
+}
+
+/* GitHub 兼容性 */
+.markdown-body .ot-bilingual-container,
+.blob-wrapper .ot-bilingual-container {
+  font-family: inherit !important;
+  background: none !important;
+}
+
+/* Stack Overflow 兼容性 */
+.post-text .ot-bilingual-container,
+.comment-copy .ot-bilingual-container {
+  font-family: inherit !important;
+  line-height: inherit !important;
+}
+
+/* Medium 兼容性 */
+article .ot-bilingual-container {
+  font-family: inherit !important;
+  color: inherit !important;
+}
+
+/* Reddit 兼容性 */
+.usertext-body .ot-bilingual-container {
+  font-family: inherit !important;
+  background: none !important;
+}
+
+/* Twitter/X 兼容性 */
+[data-testid="tweetText"] .ot-bilingual-container {
+  font-family: inherit !important;
+  color: inherit !important;
+}
+
+/* 通用新闻网站兼容性 */
+article .ot-bilingual-container,
+.article-content .ot-bilingual-container,
+.post-content .ot-bilingual-container {
+  font-family: inherit !important;
+  color: inherit !important;
+  background: none !important;
+}
+
+/* 防止与常见CSS框架冲突*/
+.ot-bilingual-container.ot-bilingual-container {
+  /* 提高选择器优先级 */
+  all: unset !important;
+  display: inline-block !important;
+  position: relative !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  transition: none !important;
+}
+
+.ot-original-text.ot-original-text,
+.ot-translated-text.ot-translated-text {
+  /* 提高选择器优先级 */
+  all: unset !important;
+  display: block !important;
+  font-family: inherit !important;
+  color: inherit !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.ot-original-text.ot-original-text {
+  opacity: 0.6 !important;
+  font-size: 0.9em !important;
+  line-height: 1.3 !important;
+  font-style: normal !important;
+}
+
+.ot-translated-text.ot-translated-text {
+  font-weight: normal !important;
+  line-height: 1.4 !important;
+  margin-top: 0 !important;
+}

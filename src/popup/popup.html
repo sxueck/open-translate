@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Translate</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <h1 class="title">Open Translate</h1>
+      </div>
+    </div>
+
+    <!-- Status Display -->
+    <div class="status-section">
+      <div id="statusIndicator" class="status-indicator">
+        <div class="status-dot"></div>
+        <span id="statusText">Ready to translate</span>
+      </div>
+    </div>
+
+    <!-- Language Selection -->
+    <div class="language-section">
+      <div class="language-row">
+        <label for="sourceLanguage">From:</label>
+        <select id="sourceLanguage" class="language-select">
+          <option value="auto">Auto Detect</option>
+          <option value="en">English</option>
+          <option value="zh-CN">Chinese (Simplified)</option>
+          <option value="zh-TW">Chinese (Traditional)</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="es">Spanish</option>
+          <option value="ru">Russian</option>
+        </select>
+      </div>
+      
+      <div class="language-row">
+        <label for="targetLanguage">To:</label>
+        <select id="targetLanguage" class="language-select">
+          <option value="zh-CN">Chinese (Simplified)</option>
+          <option value="en">English</option>
+          <option value="zh-TW">Chinese (Traditional)</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="es">Spanish</option>
+          <option value="ru">Russian</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Translation Mode -->
+    <div class="mode-section">
+      <label class="section-label">Translation Mode:</label>
+      <div class="mode-options">
+        <label class="radio-option">
+          <input type="radio" name="translationMode" value="replace" id="modeReplace">
+          <span class="radio-label">Replace</span>
+          <small class="radio-description">Replace original text</small>
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="translationMode" value="bilingual" id="modeBilingual">
+          <span class="radio-label">Paragraph Bilingual</span>
+          <small class="radio-description">Show original and translation by paragraph</small>
+        </label>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="actions-section">
+      <button id="translateBtn" class="primary-btn">
+        Translate Page
+      </button>
+
+      <button id="restoreBtn" class="secondary-btn" disabled>
+        Restore Original
+      </button>
+    </div>
+
+    <!-- Quick Settings -->
+    <div class="quick-settings">
+      <label class="checkbox-option">
+        <input type="checkbox" id="autoTranslate">
+        <span class="checkbox-label">Auto-translate new pages</span>
+      </label>
+      
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <button id="optionsBtn" class="text-btn">Advanced Settings</button>
+      <div class="version">v1.0.0</div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Translating...</div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

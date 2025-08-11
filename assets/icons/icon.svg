@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#1976d2" stroke="#1565c0" stroke-width="2"/>
+  
+  <!-- Translation symbol -->
+  <g fill="white">
+    <!-- Letter A (representing source language) -->
+    <path d="M35 45 L35 35 L25 35 L25 30 L45 30 L45 35 L35 35 L35 45 Z"/>
+    <path d="M30 50 L40 50 L42 55 L38 55 L37 52 L33 52 L32 55 L28 55 Z"/>
+    <path d="M34 48 L36 48 L35 46 Z"/>
+    
+    <!-- Arrow indicating translation -->
+    <path d="M50 42 L70 42 L65 37 L68 34 L78 44 L68 54 L65 51 L70 46 L50 46 Z"/>
+    
+    <!-- Chinese character 中 (representing target language) -->
+    <g transform="translate(85, 35)">
+      <rect x="-8" y="0" width="16" height="2" fill="white"/>
+      <rect x="-1" y="0" width="2" height="20" fill="white"/>
+      <rect x="-6" y="8" width="12" height="2" fill="white"/>
+      <rect x="-8" y="18" width="16" height="2" fill="white"/>
+    </g>
+    
+    <!-- Globe/world icon at bottom -->
+    <circle cx="64" cy="85" r="15" fill="none" stroke="white" stroke-width="2"/>
+    <path d="M52 85 Q64 75 76 85" fill="none" stroke="white" stroke-width="1.5"/>
+    <path d="M52 85 Q64 95 76 85" fill="none" stroke="white" stroke-width="1.5"/>
+    <line x1="64" y1="70" x2="64" y2="100" stroke="white" stroke-width="1.5"/>
+    <line x1="49" y1="85" x2="79" y2="85" stroke="white" stroke-width="1.5"/>
+  </g>
+  
+  <!-- Subtle gradient overlay -->
+  <defs>
+    <radialGradient id="overlay" cx="0.3" cy="0.3" r="0.8">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.2)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="60" fill="url(#overlay)"/>
+</svg>

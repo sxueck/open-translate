@@ -8,7 +8,7 @@ class TranslationService {
       apiKey: '',
       model: 'gpt-3.5-turbo',
       customModel: '',
-      temperature: 0.3,
+      temperature: 0.5,
       maxTokens: 2000,
       timeout: 30000
     };

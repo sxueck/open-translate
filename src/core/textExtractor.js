@@ -71,8 +71,117 @@ class TextExtractor {
    * Extract text nodes grouped by paragraphs
    */
   extractParagraphGroups(rootElement = document.body, options = {}) {
-    const textNodes = this.extractTextNodes(rootElement, options);
+    // 优先从主要内容区域提取文本
+    const mainContentElement = this.findMainContentArea(rootElement);
+    const extractionRoot = mainContentElement || rootElement;
+
+    const textNodes = this.extractTextNodes(extractionRoot, options);
     return this.groupTextNodesByParagraph(textNodes, options);
+  }
+
+  /**
+   * 查找主要内容区域
+   */
+  findMainContentArea(rootElement = document.body) {
+    // 按优先级查找主要内容区域
+    for (const selector of DOM_SELECTORS.MAIN_CONTENT_SELECTORS) {
+      const element = rootElement.querySelector(selector);
+      if (element && this.hasSignificantContent(element)) {
+        console.log(`Found main content area: ${selector}`);
+        return element;
+      }
+    }
+
+    // 如果没有找到明确的主要内容区域，尝试启发式方法
+    return this.findMainContentByHeuristics(rootElement);
+  }
+
+  /**
+   * 使用启发式方法查找主要内容区域
+   */
+  findMainContentByHeuristics(rootElement) {
+    const candidates = [];
+
+    // 查找包含大量文本的容器
+    const containers = rootElement.querySelectorAll('div, section, article');
+
+    containers.forEach(container => {
+      // 跳过明显的非内容区域
+      if (this.isNonContentArea(container)) {
+        return;
+      }
+
+      const textLength = container.textContent.trim().length;
+      const childElements = container.children.length;
+
+      // 计算内容密度分数
+      const score = this.calculateContentScore(container, textLength, childElements);
+
+      if (score > 0) {
+        candidates.push({ element: container, score, textLength });
+      }
+    });
+
+    // 按分数排序，返回最佳候选
+    candidates.sort((a, b) => b.score - a.score);
+
+    if (candidates.length > 0) {
+      console.log(`Found main content by heuristics: ${candidates[0].element.tagName}.${candidates[0].element.className}`);
+      return candidates[0].element;
+    }
+
+    return null;
+  }
+
+  /**
+   * 检查是否为非内容区域
+   */
+  isNonContentArea(element) {
+    const classList = element.classList;
+    const id = element.id;
+
+    // 检查常见的非内容区域类名和ID
+    const nonContentPatterns = [
+      /sidebar|side-bar|nav|menu|header|footer|toolbar|banner|ad|widget|meta|tag|share|comment|related|recommend/i
+    ];
+
+    return nonContentPatterns.some(pattern =>
+      pattern.test(classList.toString()) || pattern.test(id)
+    );
+  }
+
+  /**
+   * 计算内容区域分数
+   */
+  calculateContentScore(element, textLength, childElements) {
+    let score = 0;
+
+    // 文本长度权重
+    if (textLength > 500) score += 3;
+    else if (textLength > 200) score += 2;
+    else if (textLength > 50) score += 1;
+
+    // 段落数量权重
+    const paragraphs = element.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
+    if (paragraphs.length > 5) score += 2;
+    else if (paragraphs.length > 2) score += 1;
+
+    // 减分项：包含太多链接或按钮
+    const links = element.querySelectorAll('a');
+    const buttons = element.querySelectorAll('button, input[type="button"]');
+    if (links.length > textLength / 100) score -= 1;
+    if (buttons.length > 5) score -= 1;
+
+    return score;
+  }
+
+  /**
+   * 检查元素是否包含有意义的内容
+   */
+  hasSignificantContent(element) {
+    const textContent = element.textContent.trim();
+    return textContent.length > 100 &&
+           element.querySelectorAll('p, h1, h2, h3, h4, h5, h6').length > 0;
   }
 
   /**
@@ -133,6 +242,11 @@ class TextExtractor {
       return false;
     }
 
+    // 检查是否在非内容区域（侧边栏、导航栏等）
+    if (this.isInNonContentArea(node.parentElement)) {
+      return false;
+    }
+
     const linkParent = node.parentElement.closest('a[href]');
     if (linkParent) {
       const text = node.textContent.trim();
@@ -143,6 +257,45 @@ class TextExtractor {
 
     // Use shared utility for better performance
     return !isExcludedElement(node.parentElement, excludeSelectors);
+  }
+
+  /**
+   * 检查节点是否在非内容区域
+   */
+  isInNonContentArea(element) {
+    // 检查是否在排除的选择器范围内
+    const excludeSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT;
+
+    for (const selector of excludeSelectors) {
+      try {
+        if (element.closest(selector)) {
+          return true;
+        }
+      } catch (e) {
+        // 忽略无效的选择器
+        continue;
+      }
+    }
+
+    // 检查是否在导航相关的元素中
+    const navParent = element.closest('nav, .nav, .navbar, .navigation, .menu, .breadcrumb');
+    if (navParent) {
+      return true;
+    }
+
+    // 检查是否在侧边栏中
+    const sidebarParent = element.closest('aside, .sidebar, .side-bar, .widget, .widgets');
+    if (sidebarParent) {
+      return true;
+    }
+
+    // 检查是否在页眉页脚中
+    const headerFooterParent = element.closest('header, footer, .header, .footer, .topbar, .top-bar');
+    if (headerFooterParent) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -427,7 +580,7 @@ class TextExtractor {
 
     let node;
     while (node = walker.nextNode()) {
-      if (node.nodeType === Node.TEXT_NODE && this.hasSignificantText(node.textContent)) {
+      if (node.nodeType === Node.TEXT_NODE && hasSignificantText(node.textContent)) {
         const text = node.textContent.trim();
         result.text += (result.text ? ' ' : '') + text;
         result.textNodes.push({

@@ -11,11 +11,11 @@ class ConfigManager {
         apiKey: '',
         model: 'gpt-3.5-turbo',
         customModel: '',
-        temperature: 0.3,
+        temperature: 0.5,
         maxTokens: 2000,
         timeout: 30000
       },
-      translationMode: 'replace',
+      translationMode: 'paragraph-bilingual',
       targetLanguage: 'zh-CN',
       sourceLanguage: 'auto',
       autoTranslate: false,
@@ -149,9 +149,9 @@ class ConfigManager {
     }
 
     // Validate translation mode
-    const validModes = ['replace', 'bilingual'];
+    const validModes = ['replace', 'paragraph-bilingual'];
     if (validated.translationMode && !validModes.includes(validated.translationMode)) {
-      validated.translationMode = 'replace';
+      validated.translationMode = 'paragraph-bilingual';
     }
 
     return validated;

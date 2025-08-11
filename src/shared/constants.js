@@ -42,14 +42,14 @@ const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_MAP);
 // Translation modes
 const TRANSLATION_MODES = {
   REPLACE: 'replace',
-  BILINGUAL: 'bilingual'
+  BILINGUAL: 'paragraph-bilingual'
 };
 
 // API configuration
 const API_DEFAULTS = {
   URL: 'https://api.openai.com/v1/chat/completions',
   MODEL: 'gpt-3.5-turbo',
-  TEMPERATURE: 0.3,
+  TEMPERATURE: 0.5,
   MAX_TOKENS: 2000,
   TIMEOUT: 30000
 };
@@ -93,12 +93,79 @@ const DOM_SELECTORS = {
     'var',
     '[data-translate="no"]',
     '.notranslate',
-    '[translate="no"]'
+    '[translate="no"]',
+    'nav',
+    'aside',
+    'header',
+    'footer',
+    '.sidebar',
+    '.side-bar',
+    '.navigation',
+    '.nav',
+    '.navbar',
+    '.nav-bar',
+    '.menu',
+    '.breadcrumb',
+    '.breadcrumbs',
+    '.topbar',
+    '.top-bar',
+    '.header',
+    '.footer',
+    '.aside',
+    '.widget',
+    '.widgets',
+    '.ad',
+    '.ads',
+    '.advertisement',
+    '.banner',
+    '.toolbar',
+    '.tool-bar',
+    '.statusbar',
+    '.status-bar',
+    '.pagination',
+    '.pager',
+    '.tags',
+    '.tag-list',
+    '.meta',
+    '.metadata',
+    '.author-info',
+    '.share',
+    '.social',
+    '.social-share',
+    '.related',
+    '.recommended',
+    '.comments-nav',
+    '.comment-nav'
   ],
   BLOCK_ELEMENTS: [
     'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'article', 'section', 'header', 'footer', 'main',
     'aside', 'nav', 'blockquote', 'pre', 'li', 'td', 'th'
+  ],
+  // 主要内容区域选择器（优先翻译这些区域）
+  MAIN_CONTENT_SELECTORS: [
+    'main',
+    'article',
+    '.content',
+    '.main-content',
+    '.post-content',
+    '.entry-content',
+    '.article-content',
+    '.page-content',
+    '.blog-content',
+    '.text-content',
+    '.body-content',
+    '.story-content',
+    '.news-content',
+    '#content',
+    '#main',
+    '#main-content',
+    '#post-content',
+    '#article-content',
+    '.container .content',
+    '.wrapper .content',
+    '[role="main"]',
+    '[role="article"]'
   ],
   BILINGUAL_CONTAINER: '.ot-bilingual-container',
   BILINGUAL_ORIGINAL: '.ot-original',
@@ -173,7 +240,8 @@ const CSS_CLASSES = {
   TRANSLATED_TEXT: 'ot-translation',
   LOADING: 'ot-loading',
   ERROR: 'ot-error',
-  HIDDEN: 'ot-hidden'
+  HIDDEN: 'ot-hidden',
+  STYLE_ID: 'open-translate-bilingual-styles'
 };
 
 // Validation limits

@@ -20,7 +20,7 @@ class StateManager {
       
       // Global settings
       settings: {
-        translationMode: 'replace',
+        translationMode: 'paragraph-bilingual',
         targetLanguage: 'zh-CN',
         sourceLanguage: 'auto',
         autoTranslate: false
@@ -313,8 +313,14 @@ class StateManager {
   setupMessageListeners() {
     if (chrome.runtime && chrome.runtime.onMessage) {
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        this.handleMessage(message, sender, sendResponse);
-        return true; // Keep message channel open for async response
+        // Only handle messages that are specifically for stateManager
+        const stateManagerActions = ['getState', 'getTabState', 'updateTabState', 'updateSettings'];
+        if (stateManagerActions.includes(message.action)) {
+          this.handleMessage(message, sender, sendResponse);
+          return true; // Keep message channel open for async response
+        }
+        // Don't handle other messages - let them pass through to other listeners
+        return false;
       });
     }
   }
@@ -358,7 +364,8 @@ class StateManager {
           break;
           
         default:
-          sendResponse({ success: false, error: 'Unknown action' });
+          // This should not happen since we filter actions before calling this method
+          sendResponse({ success: false, error: 'Unknown stateManager action' });
       }
     } catch (error) {
       sendResponse({ success: false, error: error.message });

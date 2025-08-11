@@ -100,7 +100,7 @@ async function loadPreferences() {
       // Set language selections
       elements.sourceLanguage.value = result.sourceLanguage || 'auto';
       elements.targetLanguage.value = result.targetLanguage || 'zh-CN';
-      
+
       // Set translation mode
       const mode = result.translationMode || 'paragraph-bilingual';
       if (mode === 'replace') {
@@ -109,10 +109,10 @@ async function loadPreferences() {
         // 默认使用双语模式（包括段落级双语）
         elements.modeBilingual.checked = true;
       }
-      
+
       // Set checkboxes
       elements.autoTranslate.checked = result.autoTranslate || false;
-      
+
       resolve();
     });
   });
@@ -125,18 +125,18 @@ function setupEventListeners() {
   // Translation buttons
   elements.translateBtn.addEventListener('click', handleTranslate);
   elements.restoreBtn.addEventListener('click', handleRestore);
-  
+
   // Language selection changes
   elements.sourceLanguage.addEventListener('change', saveLanguagePreferences);
   elements.targetLanguage.addEventListener('change', saveLanguagePreferences);
-  
+
   // Mode changes
   elements.modeReplace.addEventListener('change', handleModeChange);
   elements.modeBilingual.addEventListener('change', handleModeChange);
-  
+
   // Settings checkboxes
   elements.autoTranslate.addEventListener('change', saveGeneralPreferences);
-  
+
   // Navigation buttons
   elements.optionsBtn.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();

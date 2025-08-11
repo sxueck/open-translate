@@ -203,7 +203,7 @@ async function handleModeSwitch(mode, tab) {
     
     // Update context menu state
     chrome.contextMenus.update('mode-replace', { checked: mode === 'replace' });
-    chrome.contextMenus.update('mode-bilingual', { checked: mode === 'bilingual' });
+    chrome.contextMenus.update('mode-bilingual', { checked: mode === 'paragraph-bilingual' });
     
     // Send mode change to content script
     try {

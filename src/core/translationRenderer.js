@@ -97,6 +97,11 @@ class TranslationRenderer {
       }
     }
 
+    // 跳过非内容区域的文本
+    if (this.isInNonContentArea(parent)) {
+      return;
+    }
+
     // Store original text for restoration
     if (!this.originalTexts.has(node)) {
       this.originalTexts.set(node, node.textContent);
@@ -164,6 +169,18 @@ class TranslationRenderer {
   createParagraphBilingualDisplay(result) {
     const container = result.container;
 
+    // 验证容器是否存在
+    if (!container || !container.parentElement) {
+      console.warn('Invalid container for bilingual display:', container);
+      return;
+    }
+
+    // 跳过非内容区域的容器
+    if (this.isInNonContentArea(container)) {
+      console.log('Skipping non-content area:', container.tagName, container.className);
+      return;
+    }
+
     // Skip if already processed - 更严格的检查
     if (container.classList.contains('ot-paragraph-bilingual') ||
         container.querySelector('.ot-paragraph-bilingual') ||
@@ -202,6 +219,11 @@ class TranslationRenderer {
     translatedSection.textContent = result.translation;
     translatedSection.setAttribute('lang', 'zh-CN');
 
+    // 确保译文元素可见
+    translatedSection.style.display = 'block';
+    translatedSection.style.visibility = 'visible';
+    translatedSection.style.opacity = '1';
+
     // Add accessibility support
     container.setAttribute('aria-label', `Original: ${originalText}. Translation: ${result.translation}`);
     container.setAttribute('role', 'group');
@@ -216,6 +238,13 @@ class TranslationRenderer {
     if (!this.originalTexts.has(container)) {
       this.originalTexts.set(container, originalContent);
     }
+
+    console.log('Bilingual display created successfully:', {
+      container: container.tagName,
+      originalText: originalText.substring(0, 50) + '...',
+      translation: result.translation.substring(0, 50) + '...',
+      translatedSectionAdded: !!container.querySelector('.ot-paragraph-translated')
+    });
   }
 
 
@@ -242,7 +271,7 @@ class TranslationRenderer {
    * Inject CSS styles for bilingual mode
    */
   injectBilingualStyles() {
-    const styleId = 'open-translate-bilingual-styles';
+    const styleId = CSS_CLASSES.STYLE_ID;
     if (document.getElementById(styleId)) return;
 
     const style = document.createElement('style');
@@ -461,6 +490,27 @@ class TranslationRenderer {
       );
     }
     
+    return false;
+  }
+
+  /**
+   * 检查元素是否在非内容区域
+   */
+  isInNonContentArea(element) {
+    // 检查是否在排除的选择器范围内
+    const excludeSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT;
+
+    for (const selector of excludeSelectors) {
+      try {
+        if (element.closest(selector)) {
+          return true;
+        }
+      } catch (e) {
+        // 忽略无效的选择器
+        continue;
+      }
+    }
+
     return false;
   }
 

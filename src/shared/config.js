@@ -20,7 +20,6 @@ class ConfigManager {
       sourceLanguage: 'auto',
       autoTranslate: false,
       preserveFormatting: true,
-      useLazyTranslation: true,
       excludeSelectors: 'script\nstyle\nnoscript\ncode\npre\nkbd\nsamp\nvar\n.notranslate\n[translate="no"]',
       batchSize: 5,
       retryAttempts: 2
@@ -33,7 +32,6 @@ class ConfigManager {
       'sourceLanguage',
       'autoTranslate',
       'preserveFormatting',
-      'useLazyTranslation',
       'excludeSelectors',
       'batchSize',
       'retryAttempts'

@@ -54,7 +54,6 @@ function initializeElements() {
   elements.defaultModeBilingual = document.getElementById('defaultModeBilingual');
   elements.autoTranslateEnabled = document.getElementById('autoTranslateEnabled');
   elements.preserveFormatting = document.getElementById('preserveFormatting');
-  elements.useLazyTranslation = document.getElementById('useLazyTranslation');
   
   // Advanced Settings
   elements.excludeSelectors = document.getElementById('excludeSelectors');
@@ -97,7 +96,6 @@ async function loadSettings() {
 
     elements.autoTranslateEnabled.checked = config.autoTranslate;
     elements.preserveFormatting.checked = config.preserveFormatting;
-    elements.useLazyTranslation.checked = config.useLazyTranslation;
 
     // Advanced Settings
     elements.excludeSelectors.value = config.excludeSelectors;
@@ -399,7 +397,6 @@ async function saveSettings() {
       translationMode: elements.defaultModeReplace.checked ? TRANSLATION_MODES.REPLACE : TRANSLATION_MODES.BILINGUAL,
       autoTranslate: elements.autoTranslateEnabled.checked,
       preserveFormatting: elements.preserveFormatting.checked,
-      useLazyTranslation: elements.useLazyTranslation.checked,
       excludeSelectors: elements.excludeSelectors.value.trim(),
       batchSize: parseInt(elements.batchSize.value),
       retryAttempts: parseInt(elements.retryAttempts.value)

@@ -215,7 +215,7 @@ class ErrorHandler {
    * Generate unique error ID
    */
   generateErrorId() {
-    return `err-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    return (typeof generateId !== 'undefined') ? generateId('err') : `err-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   }
 
   /**

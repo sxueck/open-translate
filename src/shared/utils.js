@@ -55,16 +55,16 @@ function deepClone(obj) {
  */
 function hasSignificantText(text) {
   if (!text || typeof text !== 'string') return false;
-  
+
   const trimmed = text.trim();
-  if (trimmed.length < 2) return false;
-  
+  if (trimmed.length < TEXT_PROCESSING.MIN_TEXT_LENGTH) return false;
+
   // Skip pure numbers, symbols, or whitespace
-  if (/^[\d\s\W]*$/.test(trimmed)) return false;
-  
+  if (REGEX_PATTERNS.PURE_NUMBERS_SYMBOLS.test(trimmed)) return false;
+
   // Skip single characters unless they are meaningful (e.g., Chinese characters)
-  if (trimmed.length === 1 && !/[\u4e00-\u9fff\u3400-\u4dbf]/.test(trimmed)) return false;
-  
+  if (trimmed.length === TEXT_PROCESSING.MIN_SIGNIFICANT_LENGTH && !REGEX_PATTERNS.CHINESE_CHARS.test(trimmed)) return false;
+
   return true;
 }
 
@@ -72,17 +72,7 @@ function hasSignificantText(text) {
  * Check if text contains technical content
  */
 function containsTechnicalContent(text) {
-  const technicalPatterns = [
-    /\b(API|HTTP|JSON|XML|CSS|HTML|JavaScript|Python|Java|SQL)\b/i,
-    /\b(function|class|method|variable|parameter|return)\b/i,
-    /[{}[\]();]/,
-    /https?:\/\//,
-    /\w+\.\w+\(/,
-    /\$\w+/,
-    /@\w+/
-  ];
-
-  return technicalPatterns.some(pattern => pattern.test(text));
+  return REGEX_PATTERNS.TECHNICAL_CONTENT.some(pattern => pattern.test(text));
 }
 
 /**
@@ -122,15 +112,9 @@ function formatError(error) {
  */
 function isExcludedElement(element, excludeSelectors = []) {
   if (!element || !element.matches) return true;
-  
-  const defaultExcludes = [
-    'script', 'style', 'noscript', 'iframe', 'object', 'embed',
-    'canvas', 'svg', 'math', 'code', 'pre', 'kbd', 'samp', 'var',
-    '[data-translate="no"]', '.notranslate', '[translate="no"]'
-  ];
-  
-  const allSelectors = [...defaultExcludes, ...excludeSelectors];
-  
+
+  const allSelectors = [...DOM_SELECTORS.EXCLUDE_DEFAULT, ...excludeSelectors];
+
   return allSelectors.some(selector => {
     try {
       return element.matches(selector);
@@ -226,7 +210,7 @@ function isValidUrl(string) {
  * Generate unique ID
  */
 function generateId(prefix = 'id') {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**

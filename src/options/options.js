@@ -6,26 +6,6 @@
 // DOM elements
 const elements = {};
 
-// Default configuration
-const defaultConfig = {
-  translationConfig: {
-    apiUrl: 'https://api.openai.com/v1/chat/completions',
-    apiKey: '',
-    model: 'gpt-3.5-turbo',
-    temperature: 0.3,
-    maxTokens: 2000,
-    timeout: 30000
-  },
-  sourceLanguage: 'auto',
-  targetLanguage: 'zh-CN',
-  translationMode: 'replace',
-  autoTranslate: false,
-  preserveFormatting: true,
-  excludeSelectors: 'script\nstyle\nnoscript\ncode\npre\nkbd\nsamp\nvar\n.notranslate\n[translate="no"]',
-  batchSize: 5,
-  retryAttempts: 2
-};
-
 /**
  * Initialize options page
  */
@@ -33,17 +13,17 @@ async function initialize() {
   try {
     // Get DOM elements
     initializeElements();
-    
+
     // Load current settings
     await loadSettings();
-    
+
     // Set up event listeners
     setupEventListeners();
-    
+
     console.log('Options page initialized successfully');
   } catch (error) {
-    console.error('Failed to initialize options page:', error);
-    showStatusMessage('Failed to initialize settings page', 'error');
+    errorHandler.handle(error, 'options-initialize');
+    showStatusMessage(ERROR_MESSAGES.TRANSLATION_FAILED, 'error');
   }
 }
 
@@ -74,6 +54,7 @@ function initializeElements() {
   elements.defaultModeBilingual = document.getElementById('defaultModeBilingual');
   elements.autoTranslateEnabled = document.getElementById('autoTranslateEnabled');
   elements.preserveFormatting = document.getElementById('preserveFormatting');
+  elements.useLazyTranslation = document.getElementById('useLazyTranslation');
   
   // Advanced Settings
   elements.excludeSelectors = document.getElementById('excludeSelectors');
@@ -90,44 +71,45 @@ function initializeElements() {
  * Load current settings from storage
  */
 async function loadSettings() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(Object.keys(defaultConfig), (result) => {
-      // API Configuration
-      const config = result.translationConfig || defaultConfig.translationConfig;
-      elements.apiUrl.value = config.apiUrl || defaultConfig.translationConfig.apiUrl;
-      elements.apiKey.value = config.apiKey || '';
-      elements.model.value = config.model || defaultConfig.translationConfig.model;
-      elements.customModel.value = config.customModel || '';
-      elements.temperature.value = config.temperature || defaultConfig.translationConfig.temperature;
-      elements.temperatureValue.textContent = elements.temperature.value;
-      elements.maxTokens.value = config.maxTokens || defaultConfig.translationConfig.maxTokens;
-      elements.timeout.value = (config.timeout || defaultConfig.translationConfig.timeout) / 1000;
-      
-      // Translation Settings
-      elements.defaultSourceLang.value = result.sourceLanguage || defaultConfig.sourceLanguage;
-      elements.defaultTargetLang.value = result.targetLanguage || defaultConfig.targetLanguage;
-      
-      const mode = result.translationMode || defaultConfig.translationMode;
-      if (mode === 'replace') {
-        elements.defaultModeReplace.checked = true;
-      } else {
-        elements.defaultModeBilingual.checked = true;
-      }
-      
-      elements.autoTranslateEnabled.checked = result.autoTranslate || defaultConfig.autoTranslate;
-      elements.preserveFormatting.checked = result.preserveFormatting !== false;
-      
-      // Advanced Settings
-      elements.excludeSelectors.value = result.excludeSelectors || defaultConfig.excludeSelectors;
-      elements.batchSize.value = result.batchSize || defaultConfig.batchSize;
-      elements.retryAttempts.value = result.retryAttempts || defaultConfig.retryAttempts;
+  try {
+    const config = await configManager.loadConfig();
 
-      // Update model selection UI
-      updateModelSelectionUI();
+    // API Configuration
+    const translationConfig = config.translationConfig;
+    elements.apiUrl.value = translationConfig.apiUrl;
+    elements.apiKey.value = translationConfig.apiKey || '';
+    elements.model.value = translationConfig.model;
+    elements.customModel.value = translationConfig.customModel || '';
+    elements.temperature.value = translationConfig.temperature;
+    elements.temperatureValue.textContent = elements.temperature.value;
+    elements.maxTokens.value = translationConfig.maxTokens;
+    elements.timeout.value = translationConfig.timeout / 1000;
 
-      resolve();
-    });
-  });
+    // Translation Settings
+    elements.defaultSourceLang.value = config.sourceLanguage;
+    elements.defaultTargetLang.value = config.targetLanguage;
+
+    if (config.translationMode === TRANSLATION_MODES.REPLACE) {
+      elements.defaultModeReplace.checked = true;
+    } else {
+      elements.defaultModeBilingual.checked = true;
+    }
+
+    elements.autoTranslateEnabled.checked = config.autoTranslate;
+    elements.preserveFormatting.checked = config.preserveFormatting;
+    elements.useLazyTranslation.checked = config.useLazyTranslation;
+
+    // Advanced Settings
+    elements.excludeSelectors.value = config.excludeSelectors;
+    elements.batchSize.value = config.batchSize;
+    elements.retryAttempts.value = config.retryAttempts;
+
+    // Update model selection UI
+    updateModelSelectionUI();
+  } catch (error) {
+    errorHandler.handle(error, 'options-load-settings');
+    showStatusMessage(ERROR_MESSAGES.TRANSLATION_FAILED, 'error');
+  }
 }
 
 /**
@@ -161,14 +143,6 @@ function setupEventListeners() {
   // Status message close
   const statusClose = elements.statusMessage.querySelector('.status-close');
   statusClose.addEventListener('click', hideStatusMessage);
-  
-  // Auto-hide status message
-  let statusTimeout;
-  const showStatus = (message, type) => {
-    clearTimeout(statusTimeout);
-    showStatusMessage(message, type);
-    statusTimeout = setTimeout(hideStatusMessage, 5000);
-  };
 }
 
 /**
@@ -189,6 +163,21 @@ function toggleApiKeyVisibility() {
 }
 
 /**
+ * Collect current API configuration from form
+ */
+function collectApiConfig() {
+  return {
+    apiUrl: elements.apiUrl.value.trim(),
+    apiKey: elements.apiKey.value.trim(),
+    model: elements.model.value,
+    customModel: elements.customModel.value.trim(),
+    temperature: parseFloat(elements.temperature.value),
+    maxTokens: parseInt(elements.maxTokens.value),
+    timeout: parseInt(elements.timeout.value) * 1000
+  };
+}
+
+/**
  * Test API connection
  */
 async function testApiConnection() {
@@ -200,17 +189,10 @@ async function testApiConnection() {
     testBtn.innerHTML = '<span>Testing...</span>';
     testResult.classList.add('hidden');
 
-    const config = {
-      apiUrl: elements.apiUrl.value.trim(),
-      apiKey: elements.apiKey.value.trim(),
-      model: elements.model.value,
-      temperature: parseFloat(elements.temperature.value),
-      maxTokens: parseInt(elements.maxTokens.value),
-      timeout: parseInt(elements.timeout.value) * 1000
-    };
+    const config = collectApiConfig();
 
     if (!config.apiUrl || !config.apiKey) {
-      throw new Error('Please enter both API URL and API key');
+      throw new ConfigurationError(ERROR_MESSAGES.API_KEY_MISSING);
     }
 
     // Test with a simple translation request
@@ -244,13 +226,14 @@ Translation:`
     });
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      const apiError = errorHandler.createAPIError(await response.text(), response.status);
+      throw apiError;
     }
 
     const data = await response.json();
 
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid API response format');
+      throw new APIError(ERROR_MESSAGES.INVALID_RESPONSE);
     }
 
     testResult.className = 'test-result success';
@@ -258,9 +241,9 @@ Translation:`
     testResult.classList.remove('hidden');
 
   } catch (error) {
-    console.error('API test failed:', error);
+    errorHandler.handle(error, 'options-test-connection');
     testResult.className = 'test-result error';
-    testResult.textContent = `Connection failed: ${error.message}`;
+    testResult.textContent = `Connection failed: ${formatError(error)}`;
     testResult.classList.remove('hidden');
   } finally {
     testBtn.disabled = false;
@@ -293,6 +276,48 @@ function updateModelSelectionUI() {
 }
 
 /**
+ * Fetch available models from API
+ */
+async function fetchAvailableModels(apiUrl, apiKey) {
+  try {
+    const baseUrl = apiUrl.replace('/chat/completions', '');
+    const modelsUrl = `${baseUrl}/models`;
+
+    const response = await fetch(modelsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const apiError = errorHandler.createAPIError(await response.text(), response.status);
+      throw apiError;
+    }
+
+    const data = await response.json();
+
+    if (data.data && Array.isArray(data.data)) {
+      return data.data.map(model => ({
+        id: model.id,
+        name: model.id,
+        owned_by: model.owned_by || 'unknown'
+      }));
+    } else {
+      throw new APIError(ERROR_MESSAGES.INVALID_RESPONSE);
+    }
+  } catch (error) {
+    errorHandler.handle(error, 'options-fetch-models', { suppressNotification: true });
+    return [
+      { id: API_DEFAULTS.MODEL, name: 'GPT-3.5 Turbo', owned_by: 'openai' },
+      { id: 'gpt-4', name: 'GPT-4', owned_by: 'openai' },
+      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', owned_by: 'openai' }
+    ];
+  }
+}
+
+/**
  * Refresh available models from API
  */
 async function refreshAvailableModels() {
@@ -303,20 +328,16 @@ async function refreshAvailableModels() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = 'Loading...';
 
-    // Create temporary translation service to fetch models
-    const tempConfig = {
-      apiUrl: elements.apiUrl.value.trim(),
-      apiKey: elements.apiKey.value.trim()
-    };
+    // Get API configuration for model fetching
+    const apiUrl = elements.apiUrl.value.trim();
+    const apiKey = elements.apiKey.value.trim();
 
-    if (!tempConfig.apiUrl || !tempConfig.apiKey) {
-      throw new Error('Please enter API URL and API key first');
+    if (!apiUrl || !apiKey) {
+      throw new ConfigurationError(ERROR_MESSAGES.API_KEY_MISSING);
     }
 
-    const translationService = new TranslationService();
-    translationService.config = { ...translationService.defaultConfig, ...tempConfig };
-
-    const models = await translationService.getAvailableModels();
+    // Fetch models directly from API
+    const models = await fetchAvailableModels(apiUrl, apiKey);
 
     // Save current selection
     const currentValue = modelSelect.value;
@@ -358,8 +379,8 @@ async function refreshAvailableModels() {
     showStatusMessage('Models refreshed successfully!', 'success');
 
   } catch (error) {
-    console.error('Failed to refresh models:', error);
-    showStatusMessage(`Failed to refresh models: ${error.message}`, 'error');
+    errorHandler.handle(error, 'options-refresh-models');
+    showStatusMessage(`Failed to refresh models: ${formatError(error)}`, 'error');
   } finally {
     refreshBtn.disabled = false;
     refreshBtn.textContent = 'Refresh Models';
@@ -372,31 +393,24 @@ async function refreshAvailableModels() {
 async function saveSettings() {
   try {
     const settings = {
-      translationConfig: {
-        apiUrl: elements.apiUrl.value.trim(),
-        apiKey: elements.apiKey.value.trim(),
-        model: elements.model.value,
-        customModel: elements.customModel.value.trim(),
-        temperature: parseFloat(elements.temperature.value),
-        maxTokens: parseInt(elements.maxTokens.value),
-        timeout: parseInt(elements.timeout.value) * 1000
-      },
+      translationConfig: collectApiConfig(),
       sourceLanguage: elements.defaultSourceLang.value,
       targetLanguage: elements.defaultTargetLang.value,
-      translationMode: elements.defaultModeReplace.checked ? 'replace' : 'bilingual',
+      translationMode: elements.defaultModeReplace.checked ? TRANSLATION_MODES.REPLACE : TRANSLATION_MODES.BILINGUAL,
       autoTranslate: elements.autoTranslateEnabled.checked,
       preserveFormatting: elements.preserveFormatting.checked,
+      useLazyTranslation: elements.useLazyTranslation.checked,
       excludeSelectors: elements.excludeSelectors.value.trim(),
       batchSize: parseInt(elements.batchSize.value),
       retryAttempts: parseInt(elements.retryAttempts.value)
     };
 
-    await chrome.storage.sync.set(settings);
+    await configManager.saveConfig(settings);
     showStatusMessage('Settings saved successfully!', 'success');
 
   } catch (error) {
-    console.error('Failed to save settings:', error);
-    showStatusMessage('Failed to save settings. Please try again.', 'error');
+    errorHandler.handle(error, 'options-save-settings');
+    showStatusMessage(ERROR_MESSAGES.TRANSLATION_FAILED, 'error');
   }
 }
 
@@ -409,14 +423,13 @@ async function resetSettings() {
   }
 
   try {
-    await chrome.storage.sync.clear();
-    await chrome.storage.sync.set(defaultConfig);
+    await configManager.resetToDefaults();
     await loadSettings();
     showStatusMessage('Settings reset to defaults successfully!', 'success');
 
   } catch (error) {
-    console.error('Failed to reset settings:', error);
-    showStatusMessage('Failed to reset settings. Please try again.', 'error');
+    errorHandler.handle(error, 'options-reset-settings');
+    showStatusMessage(ERROR_MESSAGES.TRANSLATION_FAILED, 'error');
   }
 }
 

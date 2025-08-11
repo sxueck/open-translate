@@ -272,12 +272,21 @@ class StateManager {
    */
   async loadSettings() {
     try {
-      const result = await chrome.storage.sync.get([
-        'translationMode', 'targetLanguage', 'sourceLanguage',
-        'autoTranslate'
-      ]);
-      
-      Object.assign(this.state.settings, result);
+      if (typeof configManager !== 'undefined') {
+        const config = await configManager.loadConfig();
+        this.state.settings = {
+          translationMode: config.translationMode,
+          targetLanguage: config.targetLanguage,
+          sourceLanguage: config.sourceLanguage,
+          autoTranslate: config.autoTranslate
+        };
+      } else {
+        const result = await chrome.storage.sync.get([
+          'translationMode', 'targetLanguage', 'sourceLanguage',
+          'autoTranslate'
+        ]);
+        Object.assign(this.state.settings, result);
+      }
     } catch (error) {
       console.warn('Failed to load settings:', error);
     }
@@ -288,7 +297,11 @@ class StateManager {
    */
   async saveSettings() {
     try {
-      await chrome.storage.sync.set(this.state.settings);
+      if (typeof configManager !== 'undefined') {
+        await configManager.updateConfig(this.state.settings);
+      } else {
+        await chrome.storage.sync.set(this.state.settings);
+      }
     } catch (error) {
       console.warn('Failed to save settings:', error);
     }

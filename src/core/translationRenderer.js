@@ -251,7 +251,6 @@ class TranslationRenderer {
     style.textContent = `
       ${this.generateAdaptiveStyles()}
 
-
       .ot-translating {
         opacity: 1;
       }
@@ -276,27 +275,61 @@ class TranslationRenderer {
         color: inherit;
       }
 
-
-
+      /* 译文样式 - 使用无衬线字体和优化间距 */
       .ot-paragraph-translated {
-        margin-top: 4px;
+        margin-top: 8px;
         padding: 0;
         color: inherit;
-        font-family: inherit;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
         font-size: inherit;
-        font-weight: inherit;
-        font-style: inherit;
-        line-height: inherit;
-        letter-spacing: inherit;
+        font-weight: 400;
+        font-style: normal;
+        line-height: 1.6;
+        letter-spacing: 0.02em;
         text-decoration: inherit;
+        opacity: 0.92;
       }
 
+      /* 原文样式调整 - 保持原有字体但优化间距 */
+      .ot-paragraph-bilingual:not(.ot-paragraph-translated) {
+        line-height: 1.5;
+        margin-bottom: 2px;
+      }
 
-      /* Responsive adjustments*/
+      /* 响应式调整 */
       @media (max-width: 768px) {
         .ot-paragraph-bilingual {
           margin: 0;
           padding: 0;
+        }
+
+        .ot-paragraph-translated {
+          margin-top: 6px;
+          line-height: 1.5;
+          font-size: 0.95em;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .ot-paragraph-translated {
+          margin-top: 4px;
+          line-height: 1.45;
+          font-size: 0.9em;
+        }
+      }
+
+      /* 深色模式适配 */
+      @media (prefers-color-scheme: dark) {
+        .ot-paragraph-translated {
+          opacity: 0.95;
+        }
+      }
+
+      /* 高对比度模式适配 */
+      @media (prefers-contrast: high) {
+        .ot-paragraph-translated {
+          opacity: 1;
+          font-weight: 500;
         }
       }
     `;
@@ -310,7 +343,6 @@ class TranslationRenderer {
   restoreOriginalText() {
     // Remove translation content from bilingual containers and restore original state
     document.querySelectorAll('.ot-paragraph-bilingual').forEach(container => {
-      // 移除翻译内容
       const translatedSection = container.querySelector('.ot-paragraph-translated');
       if (translatedSection) {
         translatedSection.remove();
@@ -437,14 +469,33 @@ class TranslationRenderer {
    */
   detectSiteStyles() {
     const body = document.body;
-    const computedStyle = window.getComputedStyle(body);
+    const html = document.documentElement;
+    const bodyStyle = window.getComputedStyle(body);
+    const htmlStyle = window.getComputedStyle(html);
+
+    // 获取最具代表性的样式
+    const backgroundColor = bodyStyle.backgroundColor !== 'rgba(0, 0, 0, 0)'
+      ? bodyStyle.backgroundColor
+      : htmlStyle.backgroundColor;
+
+    const color = bodyStyle.color !== 'rgba(0, 0, 0, 0)'
+      ? bodyStyle.color
+      : htmlStyle.color;
+
+    // 检测主要内容区域的样式
+    const mainContent = document.querySelector('main, article, .content, .main, #content, #main') || body;
+    const mainStyle = window.getComputedStyle(mainContent);
 
     return {
-      backgroundColor: computedStyle.backgroundColor,
-      color: computedStyle.color,
-      fontFamily: computedStyle.fontFamily,
-      fontSize: computedStyle.fontSize,
-      lineHeight: computedStyle.lineHeight
+      backgroundColor: backgroundColor,
+      color: color,
+      fontFamily: mainStyle.fontFamily || bodyStyle.fontFamily,
+      fontSize: mainStyle.fontSize || bodyStyle.fontSize,
+      lineHeight: mainStyle.lineHeight || bodyStyle.lineHeight,
+      // 额外的样式信息
+      fontWeight: mainStyle.fontWeight || bodyStyle.fontWeight,
+      letterSpacing: mainStyle.letterSpacing || bodyStyle.letterSpacing,
+      textAlign: mainStyle.textAlign || bodyStyle.textAlign
     };
   }
 
@@ -454,8 +505,107 @@ class TranslationRenderer {
    * Generate adaptive styles
    */
   generateAdaptiveStyles() {
+    const siteStyles = this.detectSiteStyles();
+
     return `
-      /* 双语对照样式 */
+      /* 自适应双语对照样式 */
+      .ot-paragraph-bilingual {
+        /* 继承网站原有样式但确保基础可读性 */
+        font-family: ${siteStyles.fontFamily || 'inherit'};
+        color: ${siteStyles.color || 'inherit'};
+        background-color: ${siteStyles.backgroundColor || 'transparent'};
+      }
+
+      /* 译文字体优化 - 根据检测到的语言环境选择最佳无衬线字体 */
+      .ot-paragraph-translated {
+        font-family: ${this.getOptimalSansSerifFont()};
+      }
+
+      /* 根据网站背景色调整译文透明度 */
+      ${this.generateContrastAdjustments(siteStyles)}
+
+      /* 针对不同字体大小的间距调整 */
+      ${this.generateSpacingAdjustments(siteStyles)}
+    `;
+  }
+
+  /**
+   * 获取最佳无衬线字体栈
+   */
+  getOptimalSansSerifFont() {
+    const userAgent = navigator.userAgent;
+    const language = navigator.language || 'en';
+
+    // 根据系统和语言环境选择最佳字体
+    if (language.startsWith('zh')) {
+      // 中文环境
+      if (userAgent.includes('Mac')) {
+        return `'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', sans-serif`;
+      } else if (userAgent.includes('Windows')) {
+        return `'Microsoft YaHei', 'Segoe UI', 'SimHei', sans-serif`;
+      } else {
+        return `'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Micro Hei', sans-serif`;
+      }
+    } else if (language.startsWith('ja')) {
+      // 日文环境
+      return `'Hiragino Kaku Gothic ProN', 'Noto Sans CJK JP', 'Yu Gothic', 'Meiryo', sans-serif`;
+    } else if (language.startsWith('ko')) {
+      // 韩文环境
+      return `'Apple SD Gothic Neo', 'Noto Sans CJK KR', 'Malgun Gothic', sans-serif`;
+    } else {
+      // 西文环境
+      return `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif`;
+    }
+  }
+
+  /**
+   * 生成对比度调整样式
+   */
+  generateContrastAdjustments(siteStyles) {
+    // 简单的亮度检测
+    const bgColor = siteStyles.backgroundColor;
+    let isDark = false;
+
+    if (bgColor && bgColor !== 'transparent') {
+      // 简化的亮度检测
+      isDark = bgColor.includes('rgb') &&
+               (bgColor.includes('0, 0, 0') ||
+                bgColor.includes('rgba(0, 0, 0') ||
+                bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/) &&
+                bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)[1] < 128);
+    }
+
+    return `
+      .ot-paragraph-translated {
+        opacity: ${isDark ? '0.95' : '0.92'};
+      }
+    `;
+  }
+
+  /**
+   * 生成间距调整样式
+   */
+  generateSpacingAdjustments(siteStyles) {
+    const fontSize = siteStyles.fontSize;
+    let marginTop = '8px';
+    let lineHeight = '1.6';
+
+    if (fontSize) {
+      const size = parseFloat(fontSize);
+      if (size <= 12) {
+        marginTop = '6px';
+        lineHeight = '1.5';
+      } else if (size >= 18) {
+        marginTop = '10px';
+        lineHeight = '1.65';
+      }
+    }
+
+    return `
+      .ot-paragraph-translated {
+        margin-top: ${marginTop};
+        line-height: ${lineHeight};
+      }
     `;
   }
 }

@@ -135,8 +135,6 @@ const ERROR_MESSAGES = {
   RATE_LIMITED: 'Rate limit exceeded'
 };
 
-
-
 // Context menu IDs
 const CONTEXT_MENU_IDS = {
   TRANSLATE_PAGE: 'translate-page',

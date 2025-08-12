@@ -2,6 +2,11 @@
 
 A powerful Chrome browser extension for web page translation with OpenAI API compatibility.
 
+## ScreenShot
+
+<img width="680" height="912" alt="image" src="https://github.com/user-attachments/assets/09668d37-1e33-4b19-9f35-fc32a1aa558d" />
+<img width="1404" height="418" alt="image" src="https://github.com/user-attachments/assets/de53f2ba-0d1c-4d40-99d0-bd20ffe7f05d" />
+
 ## Features
 
 ### Core Translation Capabilities

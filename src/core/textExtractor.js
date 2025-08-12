@@ -1,4 +1,18 @@
 /**
+ * Check if text contains significant content for translation
+ */
+function hasSignificantText(text) {
+  if (!text || typeof text !== 'string') return false;
+
+  const trimmed = text.trim();
+  if (trimmed.length < TEXT_PROCESSING.MIN_TEXT_LENGTH) return false;
+  if (REGEX_PATTERNS.PURE_NUMBERS_SYMBOLS.test(trimmed)) return false;
+  if (trimmed.length === TEXT_PROCESSING.MIN_SIGNIFICANT_LENGTH && !REGEX_PATTERNS.CHINESE_CHARS.test(trimmed)) return false;
+
+  return true;
+}
+
+/**
  * Text extraction and DOM manipulation utilities
  */
 class TextExtractor {
@@ -394,6 +408,17 @@ class TextExtractor {
       return false;
     }
 
+    // 特殊处理：允许内联代码标签中的文本被翻译
+    const codeParent = node.parentElement.closest('code');
+    if (codeParent) {
+      // 如果是在 pre > code 结构中，则排除
+      if (codeParent.closest('pre')) {
+        return false;
+      }
+      // 内联代码标签中的文本可以翻译
+      return true;
+    }
+
     // 检查是否在非内容区域（侧边栏、导航栏等）
     if (this.isInNonContentArea(node.parentElement)) {
       return false;
@@ -769,19 +794,32 @@ class TextExtractor {
     if (!container || !plainText) return false;
 
     // Check if container has significant HTML structure
-    const htmlElements = container.querySelectorAll('a, code, span, strong, em, b, i, u, mark, sup, sub');
+    const htmlElements = container.querySelectorAll('a, code, span, strong, em, b, i, u, mark, sup, sub, small, big, tt, kbd, samp, var');
     if (htmlElements.length === 0) return false;
 
-    // Check if any of these elements contain significant text
+    // Check if any of these elements contain significant text or important attributes
     let hasSignificantHtmlText = false;
     htmlElements.forEach(el => {
       const text = el.textContent.trim();
-      if (text.length > 0 && hasSignificantText(text)) {
+      // Consider element significant if it has text content or important attributes like href
+      if ((text.length > 0 && hasSignificantText(text)) ||
+          el.hasAttribute('href') ||
+          el.hasAttribute('title') ||
+          el.classList.length > 0) {
         hasSignificantHtmlText = true;
       }
     });
 
-    return hasSignificantHtmlText;
+    // Also check if the HTML content is significantly different from plain text
+    const htmlContent = this.extractHtmlContent(container);
+    const plainTextLength = plainText.replace(/\s+/g, ' ').trim().length;
+    const htmlContentLength = htmlContent.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().length;
+
+    // If HTML content has significantly more structure, use HTML
+    const hasStructuralDifference = htmlContent.includes('<') &&
+                                   (htmlContentLength > plainTextLength * 0.8);
+
+    return hasSignificantHtmlText || hasStructuralDifference;
   }
 
   /**
@@ -810,8 +848,8 @@ class TextExtractor {
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const tagName = node.tagName.toLowerCase();
 
-        // Preserve important inline tags
-        if (['a', 'code', 'span', 'strong', 'em', 'b', 'i', 'u', 'mark', 'sup', 'sub'].includes(tagName)) {
+        // Preserve important inline tags and their nested content
+        if (['a', 'code', 'span', 'strong', 'em', 'b', 'i', 'u', 'mark', 'sup', 'sub', 'small', 'big', 'tt', 'kbd', 'samp', 'var'].includes(tagName)) {
           const attributes = this.getImportantAttributes(node);
           const innerText = this.getTextWithInlineTags(node);
 
@@ -819,7 +857,7 @@ class TextExtractor {
             result += `<${tagName}${attributes}>${innerText}</${tagName}>`;
           }
         } else {
-          // For other elements, just get the text content
+          // For other elements, recursively process their content
           result += this.getTextWithInlineTags(node);
         }
       }
@@ -832,19 +870,34 @@ class TextExtractor {
    * Get important attributes from an element
    */
   getImportantAttributes(element) {
-    const importantAttrs = ['href', 'title', 'class'];
     let attrs = '';
 
-    importantAttrs.forEach(attr => {
+    // Handle standard attributes
+    ['href', 'title', 'class', 'id', 'target', 'rel'].forEach(attr => {
       if (element.hasAttribute(attr)) {
         const value = element.getAttribute(attr);
         if (value) {
-          attrs += ` ${attr}="${value}"`;
+          attrs += ` ${attr}="${this.escapeAttributeValue(value)}"`;
         }
       }
     });
 
+    // Handle data-* and aria-* attributes
+    Array.from(element.attributes).forEach(attr => {
+      if (attr.name.startsWith('data-') || attr.name.startsWith('aria-')) {
+        attrs += ` ${attr.name}="${this.escapeAttributeValue(attr.value)}"`;
+      }
+    });
+
     return attrs;
+  }
+
+  /**
+   * Escape attribute values to prevent HTML injection
+   */
+  escapeAttributeValue(value) {
+    if (!value) return '';
+    return value.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   /**

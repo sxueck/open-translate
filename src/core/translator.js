@@ -182,9 +182,11 @@ class TranslationService {
 
     // Add HTML handling instructions if text contains HTML
     if (this.containsHtmlTags(text)) {
-      baseInstructions.push('7. The text contains HTML tags. Preserve all HTML tags and their structure exactly as they appear');
-      baseInstructions.push('8. Only translate the text content within HTML tags, not the tags themselves');
-      baseInstructions.push('9. Maintain the exact same HTML structure in the translation');
+      baseInstructions.push('7. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in the translation');
+      baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
     }
 
     // Add language-specific instructions
@@ -539,9 +541,11 @@ Translation:`;
     // Check if any text in the batch contains HTML
     const hasHtml = batch.some(item => this.containsHtmlTags(item.text));
     if (hasHtml) {
-      baseInstructions.push('7. Some segments contain HTML tags. Preserve all HTML tags and their structure exactly');
-      baseInstructions.push('8. Only translate the text content within HTML tags, not the tags themselves');
-      baseInstructions.push('9. Maintain the exact same HTML structure in each translation');
+      baseInstructions.push('7. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in each translation');
+      baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
     }
 
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
@@ -874,9 +878,11 @@ Translations:`;
     // Check if any group contains HTML
     const hasHtml = batch.some(group => this.containsHtmlTags(group.combinedText));
     if (hasHtml) {
-      baseInstructions.push('7. Some segments contain HTML tags. Preserve all HTML tags and their structure exactly');
-      baseInstructions.push('8. Only translate the text content within HTML tags, not the tags themselves');
-      baseInstructions.push('9. Maintain the exact same HTML structure in each translation');
+      baseInstructions.push('7. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in each translation');
+      baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
     }
 
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);

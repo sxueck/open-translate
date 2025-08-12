@@ -296,22 +296,33 @@ class TranslationRenderer {
     tempDiv.innerHTML = html;
 
     // Remove potentially dangerous elements and attributes
-    const dangerousElements = tempDiv.querySelectorAll('script, style, iframe, object, embed');
+    const dangerousElements = tempDiv.querySelectorAll('script, style, iframe, object, embed, form, input, button');
     dangerousElements.forEach(el => el.remove());
 
-    // Remove dangerous attributes
+    // Remove dangerous attributes but preserve important ones
     const allElements = tempDiv.querySelectorAll('*');
     allElements.forEach(el => {
-      const dangerousAttrs = ['onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur'];
+      const dangerousAttrs = ['onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset'];
       dangerousAttrs.forEach(attr => {
         if (el.hasAttribute(attr)) {
           el.removeAttribute(attr);
         }
       });
 
-      // Remove javascript: links
-      if (el.hasAttribute('href') && el.getAttribute('href').startsWith('javascript:')) {
-        el.removeAttribute('href');
+      // Remove javascript: links but preserve other href values
+      if (el.hasAttribute('href')) {
+        const href = el.getAttribute('href');
+        if (href.startsWith('javascript:') || href.startsWith('data:') || href.startsWith('vbscript:')) {
+          el.removeAttribute('href');
+        }
+      }
+
+      // Remove dangerous src attributes
+      if (el.hasAttribute('src')) {
+        const src = el.getAttribute('src');
+        if (src.startsWith('javascript:') || src.startsWith('data:') || src.startsWith('vbscript:')) {
+          el.removeAttribute('src');
+        }
       }
     });
 

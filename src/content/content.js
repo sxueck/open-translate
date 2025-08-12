@@ -172,15 +172,39 @@ async function handleTranslateRequest(options = {}) {
     // Extract text nodes if not already done or if page changed
     if (!isTranslated || options.forceRefresh) {
       // Use paragraph-based extraction for better concurrent translation
-      const paragraphGroups = textExtractor.extractParagraphGroups();
+      let paragraphGroups = textExtractor.extractParagraphGroups();
 
       if (paragraphGroups.length === 0) {
         // Check if page is still loading or has dynamic content
         const hasText = document.body && document.body.textContent.trim().length > 0;
-        const errorMessage = hasText
-          ? 'No translatable text found on this page. The page may contain only images, videos, or non-text content.'
-          : 'Page appears to be empty or still loading. Please wait and try again.';
-        throw new Error(errorMessage);
+
+        // 尝试更宽松的文本提取
+        if (hasText) {
+          const fallbackTextNodes = textExtractor.extractTextNodes(document.body, {
+            excludeSelectors: [
+              'script', 'style', 'noscript', 'iframe', 'object', 'embed',
+              'canvas', 'svg', 'math', 'pre code', '[data-translate="no"]',
+              '.notranslate', '[translate="no"]'
+            ]
+          });
+
+          if (fallbackTextNodes.length > 0) {
+            // 使用回退方案进行翻译
+            const fallbackGroups = textExtractor.groupTextNodesByParagraph(fallbackTextNodes);
+            if (fallbackGroups.length > 0) {
+              // 继续使用回退提取的文本组
+              paragraphGroups = fallbackGroups;
+            }
+          }
+        }
+
+        // 如果仍然没有找到可翻译文本，抛出错误
+        if (paragraphGroups.length === 0) {
+          const errorMessage = hasText
+            ? 'No translatable text found on this page. The page may contain only images, videos, or non-text content.'
+            : 'Page appears to be empty or still loading. Please wait and try again.';
+          throw new Error(errorMessage);
+        }
       }
 
       // 重置翻译数据
@@ -270,17 +294,31 @@ async function handleTranslateRequest(options = {}) {
     });
 
   } catch (error) {
+    // 检查是否已经有部分翻译成功
+    const hasPartialTranslation = currentTranslations.length > 0 ||
+                                  translationRenderer.getTranslationStats().translatedElements > 0;
 
-    // Use errorHandler if available
-    if (typeof errorHandler !== 'undefined') {
-      errorHandler.handle(error, 'content-translation', {
-        logToConsole: true,
-        suppressNotification: false
+    if (hasPartialTranslation) {
+      // 如果有部分翻译成功，将状态设置为已翻译而不是错误
+      isTranslated = true;
+      notifyStatusChange('translated', {
+        totalTranslated: currentTranslations.length,
+        mode: translationMode,
+        warning: error.message
       });
-    }
+    } else {
+      // 只有在完全没有翻译成功时才报告错误
+      // Use errorHandler if available
+      if (typeof errorHandler !== 'undefined') {
+        errorHandler.handle(error, 'content-translation', {
+          logToConsole: true,
+          suppressNotification: false
+        });
+      }
 
-    notifyStatusChange('error', error.message);
-    throw error;
+      notifyStatusChange('error', error.message);
+      throw error;
+    }
   } finally {
     isTranslating = false;
   }
@@ -292,10 +330,8 @@ async function handleTranslateRequest(options = {}) {
 async function handleRestoreRequest() {
   try {
     if (translationMode === 'paragraph-bilingual') {
-      // 在双语模式下，restore 应该只显示原文，不清除翻译状态
       translationRenderer.showOriginalOnly();
     } else {
-      // 在替换模式下，restore 完全恢复原文并清除翻译状态
       translationRenderer.restoreOriginalText();
       isTranslated = false;
       currentTranslations = [];

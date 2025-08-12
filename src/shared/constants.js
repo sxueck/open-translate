@@ -88,7 +88,7 @@ const DOM_SELECTORS = {
     'canvas',
     'svg',
     'math',
-    'code',
+    'pre code',
     'pre',
     'kbd',
     'samp',

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Long Text Select Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .instructions {
+            background: #f0f8ff;
+            padding: 15px;
+            border-left: 4px solid #007cba;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Long Text Select Element Test</h1>
+    
+    <div class="instructions">
+        <p><strong>Test Instructions:</strong></p>
+        <ol>
+            <li>Use the extension to translate this page in <strong>Bilingual mode</strong></li>
+            <li>Check how long option text is handled in the dropdown</li>
+            <li>Verify that text truncation works properly to prevent overflow</li>
+            <li>Test both short and long options in the same dropdown</li>
+        </ol>
+    </div>
+
+    <div class="form-group">
+        <label for="service-plan">Select a service plan:</label>
+        <select id="service-plan" name="service-plan">
+            <option value="">Please select a service plan that best fits your needs</option>
+            <option value="basic">Basic Plan - Limited features for personal use with basic support</option>
+            <option value="standard">Standard Plan - Enhanced features for small teams with priority support and advanced analytics</option>
+            <option value="premium">Premium Plan - Advanced features for large organizations with dedicated account management and custom integrations</option>
+            <option value="enterprise">Enterprise Plan - Full-featured solution with custom support, unlimited users, advanced security features, and dedicated infrastructure</option>
+            <option value="custom">Custom Plan - Tailored solution designed specifically for your organization's unique requirements and business processes</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="subscription">Subscription type:</label>
+        <select id="subscription" name="subscription">
+            <option value="">Choose subscription</option>
+            <option value="monthly">Monthly subscription with flexible cancellation policy</option>
+            <option value="quarterly">Quarterly subscription with 10% discount and priority customer support</option>
+            <option value="annual">Annual subscription with 20% discount, priority support, and exclusive features</option>
+            <option value="biennial">Two-year subscription with 30% discount, dedicated account manager, and premium support</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="features">Additional features:</label>
+        <select id="features" name="features" multiple>
+            <option value="analytics">Advanced analytics and reporting dashboard with real-time data visualization</option>
+            <option value="integration">Third-party integrations with popular business tools and platforms</option>
+            <option value="security">Enhanced security features including two-factor authentication and encryption</option>
+            <option value="support">24/7 premium customer support with dedicated technical specialists</option>
+            <option value="training">Comprehensive training programs and educational resources for your team</option>
+            <option value="customization">Custom branding and white-label solutions for your organization</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="region">Service region:</label>
+        <select id="region" name="region">
+            <option value="">Select your preferred service region</option>
+            <option value="na-east">North America East - High-performance servers located in New York and Toronto</option>
+            <option value="na-west">North America West - Optimized infrastructure in California and Vancouver</option>
+            <option value="eu-central">Europe Central - Data centers in Frankfurt, Amsterdam, and Zurich</option>
+            <option value="eu-west">Europe West - Infrastructure spanning London, Paris, and Dublin</option>
+            <option value="asia-pacific">Asia Pacific - Servers in Tokyo, Singapore, and Sydney for optimal performance</option>
+            <option value="global">Global - Distributed infrastructure with automatic load balancing and failover</option>
+        </select>
+    </div>
+
+    <p>This test page contains dropdown options with varying text lengths to verify that the bilingual translation feature handles long text appropriately without breaking the user interface.</p>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Long text select test page loaded');
+            
+            // Add change listeners for testing
+            document.querySelectorAll('select').forEach(select => {
+                select.addEventListener('change', function() {
+                    console.log(`Selected: ${this.value} from ${this.id}`);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

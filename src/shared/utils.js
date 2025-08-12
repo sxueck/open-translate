@@ -118,8 +118,11 @@ function isExcludedElement(element, excludeSelectors = []) {
   // Check for contenteditable elements
   if (element.contentEditable === 'true') return true;
 
-  // Check for form input elements
-  if (['input', 'textarea', 'select', 'button'].includes(tagName)) return true;
+  // Check for form input elements (but allow option elements within select)
+  if (['input', 'textarea', 'button'].includes(tagName)) return true;
+
+  // Exclude select elements but allow option elements
+  if (tagName === 'select') return true;
 
   // Check against all exclude selectors
   const allSelectors = [...DOM_SELECTORS.EXCLUDE_DEFAULT, ...excludeSelectors];

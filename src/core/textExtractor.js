@@ -758,11 +758,16 @@ class TextExtractor {
   findParagraphContainer(element) {
     let current = element;
 
+    // Special handling for option elements - they are their own containers
+    if (current && current.tagName && current.tagName.toLowerCase() === 'option') {
+      return current;
+    }
+
     // Look for paragraph-level containers
     const paragraphElements = [
       'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'li', 'td', 'th', 'blockquote', 'pre',
-      'div', 'article', 'section'
+      'div', 'article', 'section', 'option'
     ];
 
     while (current && current !== document.body) {

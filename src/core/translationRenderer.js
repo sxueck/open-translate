@@ -95,6 +95,25 @@ class TranslationRenderer {
     const node = textNode.node;
     const parent = node.parentElement;
 
+    // Special handling for option elements in replace mode
+    if (parent && parent.tagName && parent.tagName.toLowerCase() === 'option') {
+      // Store original text for restoration
+      if (!this.originalTexts.has(parent)) {
+        this.originalTexts.set(parent, parent.textContent);
+      }
+
+      // Clean up any bilingual attributes
+      parent.removeAttribute('data-ot-bilingual');
+      parent.removeAttribute('data-original-text');
+      parent.removeAttribute('data-translation');
+
+      // Replace with translation
+      const cleanTranslation = this.stripHtmlTags(translation);
+      parent.textContent = cleanTranslation;
+      this.translatedElements.add(parent);
+      return;
+    }
+
     // Skip if already processed or if node is in a bilingual container
     if (this.translatedElements.has(parent) ||
         parent.classList.contains('ot-bilingual-container') ||
@@ -222,6 +241,18 @@ class TranslationRenderer {
     const orphanedSections = document.querySelectorAll('.ot-paragraph-translated, .ot-original-text, .ot-translated-text');
     orphanedSections.forEach(section => section.remove());
 
+    // Clean up option elements
+    const bilingualOptions = document.querySelectorAll('option[data-ot-bilingual="true"]');
+    bilingualOptions.forEach(option => {
+      const originalText = option.getAttribute('data-original-text');
+      if (originalText) {
+        option.textContent = originalText;
+      }
+      option.removeAttribute('data-ot-bilingual');
+      option.removeAttribute('data-original-text');
+      option.removeAttribute('data-translation');
+    });
+
     // Remove injected bilingual styles
     const bilingualStyles = document.getElementById('open-translate-bilingual-styles');
     if (bilingualStyles) {
@@ -283,6 +314,12 @@ class TranslationRenderer {
 
     // 验证容器是否存在
     if (!container || !container.parentElement) {
+      return;
+    }
+
+    // Special handling for option elements
+    if (container && container.tagName.toLowerCase() === 'option') {
+      this.createOptionBilingualDisplay(container, result);
       return;
     }
 
@@ -531,6 +568,22 @@ class TranslationRenderer {
       .ot-paragraph-bilingual.ot-original-only .ot-paragraph-translated {
         display: none !important;
       }
+
+      /* Option元素双语样式 */
+      option[data-ot-bilingual="true"] {
+        font-family: inherit;
+        font-size: inherit;
+        line-height: normal;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* 确保select下拉框能正确显示双语文本 */
+      select option {
+        padding: 4px 8px;
+        line-height: 1.4;
+      }
     `;
 
     document.head.appendChild(style);
@@ -554,6 +607,12 @@ class TranslationRenderer {
           element.removeAttribute('data-translated-lang');
           element.removeAttribute('aria-label');
           element.removeAttribute('role');
+        } else if (element.tagName && element.tagName.toLowerCase() === 'option') {
+          // Special handling for option elements
+          element.textContent = originalContent;
+          element.removeAttribute('data-ot-bilingual');
+          element.removeAttribute('data-original-text');
+          element.removeAttribute('data-translation');
         } else if (typeof originalContent === 'string') {
           // Restore text content for text nodes
           element.textContent = originalContent;
@@ -579,6 +638,14 @@ class TranslationRenderer {
     document.querySelectorAll('.ot-paragraph-bilingual').forEach(container => {
       container.classList.add('ot-original-only');
     });
+
+    // Handle option elements - show only original text
+    document.querySelectorAll('option[data-ot-bilingual="true"]').forEach(option => {
+      const originalText = option.getAttribute('data-original-text');
+      if (originalText) {
+        option.textContent = originalText;
+      }
+    });
   }
 
   /**
@@ -594,6 +661,15 @@ class TranslationRenderer {
     document.querySelectorAll('.ot-paragraph-bilingual').forEach(container => {
       container.classList.remove('ot-original-only');
     });
+
+    // Handle option elements - show bilingual text
+    document.querySelectorAll('option[data-ot-bilingual="true"]').forEach(option => {
+      const originalText = option.getAttribute('data-original-text');
+      const translation = option.getAttribute('data-translation');
+      if (originalText && translation) {
+        option.textContent = `${originalText} ${translation}`;
+      }
+    });
   }
 
   /**
@@ -601,7 +677,8 @@ class TranslationRenderer {
    */
   isTranslated() {
     return this.translatedElements.size > 0 ||
-           document.querySelectorAll('.ot-paragraph-bilingual').length > 0;
+           document.querySelectorAll('.ot-paragraph-bilingual').length > 0 ||
+           document.querySelectorAll('option[data-ot-bilingual="true"]').length > 0;
   }
 
   /**
@@ -611,6 +688,7 @@ class TranslationRenderer {
     return {
       translatedElements: this.translatedElements.size,
       paragraphBilingualContainers: document.querySelectorAll('.ot-paragraph-bilingual').length,
+      bilingualOptions: document.querySelectorAll('option[data-ot-bilingual="true"]').length,
       mode: this.translationMode,
       hasOriginalTexts: this.originalTexts.size > 0
     };
@@ -872,6 +950,68 @@ class TranslationRenderer {
         line-height: ${lineHeight};
       }
     `;
+  }
+
+  /**
+   * Create bilingual display for option elements
+   */
+  createOptionBilingualDisplay(optionElement, result) {
+    if (!optionElement || !result || !result.translation) {
+      return;
+    }
+
+    // Skip if already processed
+    if (optionElement.hasAttribute('data-ot-bilingual') ||
+        this.translatedElements.has(optionElement)) {
+      return;
+    }
+
+    const originalText = result.originalText.trim();
+    const translation = result.translation.trim();
+
+    // Skip very short text that might not need translation
+    if (originalText.length < 2) {
+      return;
+    }
+
+    // Store original text for restoration
+    if (!this.originalTexts.has(optionElement)) {
+      this.originalTexts.set(optionElement, optionElement.textContent);
+    }
+
+    // Create bilingual text: "Original Text 译文"
+    // For very long text, truncate to prevent option overflow
+    let displayOriginal = originalText;
+    let displayTranslation = translation;
+
+    const maxLength = 80; // Maximum total length for option text
+    const combinedLength = originalText.length + translation.length + 1; // +1 for space
+
+    if (combinedLength > maxLength) {
+      // If combined text is too long, prioritize original text and truncate translation
+      const availableForTranslation = maxLength - originalText.length - 4; // -4 for " ..."
+      if (availableForTranslation > 10) {
+        displayTranslation = translation.substring(0, availableForTranslation) + '...';
+      } else {
+        // If original is too long, truncate both
+        const halfLength = Math.floor(maxLength / 2) - 2;
+        displayOriginal = originalText.substring(0, halfLength) + '...';
+        displayTranslation = translation.substring(0, halfLength) + '...';
+      }
+    }
+
+    const bilingualText = `${displayOriginal} ${displayTranslation}`;
+
+    // Update option text content
+    optionElement.textContent = bilingualText;
+
+    // Mark as processed
+    optionElement.setAttribute('data-ot-bilingual', 'true');
+    optionElement.setAttribute('data-original-text', originalText);
+    optionElement.setAttribute('data-translation', translation);
+
+    // Add to translated elements set
+    this.translatedElements.add(optionElement);
   }
 }
 

@@ -259,12 +259,15 @@ async function handleTranslate() {
       throw new Error('Translation not available on this page');
     }
 
+    const currentMode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
+
     const response = await sendMessageWithTimeout(currentTab.id, {
       action: 'translate',
       options: {
         sourceLanguage: elements.sourceLanguage.value,
         targetLanguage: elements.targetLanguage.value,
-        forceRefresh: isTranslated
+        forceRefresh: isTranslated,
+        translationMode: currentMode
       }
     }, 60000);
 

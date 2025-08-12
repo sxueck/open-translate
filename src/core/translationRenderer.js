@@ -118,8 +118,17 @@ class TranslationRenderer {
       return;
     }
 
-    // 确保清理任何残留的双语模式样式
+    // 确保清理任何残留的双语模式样式和元素
     this.cleanupBilingualElements(parent);
+
+    // 移除可能存在的双语容器
+    const bilingualContainer = parent.querySelector('.ot-bilingual-container');
+    if (bilingualContainer) {
+      bilingualContainer.remove();
+    }
+
+    // 移除双语模式的类名
+    parent.classList.remove('ot-paragraph-bilingual', 'ot-bilingual-container');
 
     // Store original text for restoration
     if (!this.originalTexts.has(node)) {
@@ -624,17 +633,26 @@ class TranslationRenderer {
     // 先恢复原始状态
     this.restoreOriginalText();
 
-    // 如果切换到Replace模式，确保彻底清理双语模式残留
-    if (newMode === 'replace') {
-      this.cleanupAllBilingualElements();
-    }
+    // 彻底清理所有翻译相关的DOM元素
+    this.cleanupAllBilingualElements();
+    this.translatedElements.clear();
 
     // 设置新模式
     this.setMode(newMode);
 
     // 根据新模式重新渲染
-    if (newMode === 'replace' && textNodes && translations) {
-      this.renderReplaceMode(textNodes, translations);
+    if (textNodes && translations) {
+      if (newMode === 'replace') {
+        this.renderReplaceMode(textNodes, translations);
+      } else if (newMode === 'paragraph-bilingual') {
+        this.ensureBilingualStyles();
+        // 对于双语模式，需要重新处理每个翻译结果
+        translations.forEach(translation => {
+          if (translation.success) {
+            this.createParagraphBilingualDisplay(translation);
+          }
+        });
+      }
     }
   }
 

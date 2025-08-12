@@ -238,7 +238,7 @@ async function handleTranslateRequest(options = {}) {
       // Use paragraph-based extraction for better concurrent translation
       // Pass translation mode to ensure proper text extraction
       let paragraphGroups = textExtractor.extractParagraphGroups(document.body, {
-        translationMode: translationMode
+        translationMode: options.translationMode || translationMode
       });
 
       if (paragraphGroups.length === 0) {
@@ -324,7 +324,7 @@ async function handleTranslateRequest(options = {}) {
         targetLanguage,
         sourceLanguage,
         progressCallback,
-        { translationMode: translationMode }
+        { translationMode: options.translationMode || translationMode }
       );
 
     }
@@ -441,15 +441,18 @@ async function handleSwitchModeRequest(newMode) {
     // 保存用户偏好
     await chrome.storage.sync.set({ translationMode: newMode });
 
-    // 如果页面已翻译，重新渲染或重新翻译
+    // 如果页面已翻译，需要重新翻译以确保模式切换正确
     if (isTranslated && currentTranslations.length > 0) {
-      // 从替换模式切换到双语模式需要重新翻译
-      if (newMode === 'paragraph-bilingual' && oldMode === 'replace') {
-        await handleTranslateRequest({ forceRefresh: true });
-      } else {
-        // 其他情况使用现有翻译数据切换模式
-        await translationRenderer.switchMode(newMode, currentTextNodes, currentTranslations);
+      // 清理缓存确保重新提取和翻译
+      if (textExtractor) {
+        textExtractor.clearCache();
       }
+
+      // 强制重新翻译以确保模式切换的正确性
+      await handleTranslateRequest({
+        forceRefresh: true,
+        translationMode: newMode
+      });
     }
 
     notifyStatusChange('modeChanged', newMode);

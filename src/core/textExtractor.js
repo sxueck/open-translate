@@ -90,7 +90,9 @@ class TextExtractor {
       childCount: rootElement.children.length,
       textLength: rootElement.textContent.length,
       mode: mode,
-      excludeSelectors: JSON.stringify(options.excludeSelectors || [])
+      excludeSelectors: JSON.stringify(options.excludeSelectors || []),
+      // 添加翻译模式到缓存键中，确保不同模式使用不同的缓存
+      translationMode: options.translationMode || 'replace'
     };
 
     // Simple hash function for cache key

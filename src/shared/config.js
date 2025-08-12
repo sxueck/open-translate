@@ -165,7 +165,7 @@ class ConfigManager {
     }
 
     // Validate language codes
-    const validLanguages = ['auto', 'zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'fr', 'de', 'es', 'ru'];
+    const validLanguages = ['auto', ...SUPPORTED_LANGUAGES];
     if (validated.targetLanguage && !validLanguages.includes(validated.targetLanguage)) {
       validated.targetLanguage = 'zh-CN';
     }

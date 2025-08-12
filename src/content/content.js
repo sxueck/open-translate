@@ -26,10 +26,7 @@ async function initialize() {
     await loadUserPreferences();
     setupMessageListeners();
     setupContextMenu();
-
-    console.log('Open Translate content script initialized');
   } catch (error) {
-    console.error('Failed to initialize Open Translate:', error);
 
     // Use errorHandler if available
     if (typeof errorHandler !== 'undefined') {
@@ -137,7 +134,6 @@ async function handleMessage(message, sender, sendResponse) {
         sendResponse({ success: false, error: 'Unknown action' });
     }
   } catch (error) {
-    console.error('Error handling message:', error);
 
     // Use errorHandler if available
     if (typeof errorHandler !== 'undefined') {
@@ -196,7 +192,6 @@ async function handleTranslateRequest(options = {}) {
         try {
           // 检查是否正在导航，如果是则停止翻译
           if (isNavigating) {
-            console.log('Navigation detected, stopping translation');
             return;
           }
 
@@ -255,7 +250,6 @@ async function handleTranslateRequest(options = {}) {
           }
 
         } catch (renderError) {
-          console.error('Failed to render translation progress:', renderError);
         }
       };
 
@@ -266,7 +260,7 @@ async function handleTranslateRequest(options = {}) {
         progressCallback
       );
 
-      console.log(`Translation completed: ${paragraphResults.filter(r => r.success).length}/${paragraphResults.length} successful`);
+
     }
 
     isTranslated = true;
@@ -276,7 +270,6 @@ async function handleTranslateRequest(options = {}) {
     });
 
   } catch (error) {
-    console.error('Translation failed:', error);
 
     // Use errorHandler if available
     if (typeof errorHandler !== 'undefined') {
@@ -310,7 +303,6 @@ async function handleRestoreRequest() {
 
     notifyStatusChange('restored');
   } catch (error) {
-    console.error('Restore failed:', error);
     throw error;
   }
 }
@@ -339,7 +331,6 @@ async function handleToggleBilingualView() {
       return { showingOriginalOnly: true };
     }
   } catch (error) {
-    console.error('Toggle bilingual view failed:', error);
     throw error;
   }
 }
@@ -353,15 +344,12 @@ async function handleSwitchModeRequest(newMode) {
   }
 
   try {
-    const oldMode = translationMode;
-
     // 如果模式相同，无需切换
-    if (oldMode === newMode) {
-      console.log(`Already in ${newMode} mode, no switch needed`);
+    if (translationMode === newMode) {
       return;
     }
 
-    console.log(`Switching translation mode from ${oldMode} to ${newMode}`);
+    const oldMode = translationMode;
 
     // 更新全局状态
     translationMode = newMode;
@@ -370,27 +358,19 @@ async function handleSwitchModeRequest(newMode) {
     // 保存用户偏好
     await chrome.storage.sync.set({ translationMode: newMode });
 
-    // 如果页面已翻译，需要重新渲染
+    // 如果页面已翻译，重新渲染或重新翻译
     if (isTranslated && currentTranslations.length > 0) {
+      // 从替换模式切换到双语模式需要重新翻译
       if (newMode === 'paragraph-bilingual' && oldMode === 'replace') {
-        // 从替换模式切换到双语模式需要重新翻译以获取正确的段落组信息
-        console.log('Re-translating for bilingual mode');
         await handleTranslateRequest({ forceRefresh: true });
-      } else if (newMode === 'replace' && oldMode === 'paragraph-bilingual') {
-        // 从双语模式切换到替换模式，使用现有翻译数据
-        console.log('Switching to replace mode with existing translations');
-        await translationRenderer.switchMode(newMode, currentTextNodes, currentTranslations);
       } else {
-        // 理论上不应该到达这里，但保留作为安全措施
-        console.log('Unexpected mode switch scenario, using switchMode');
+        // 其他情况使用现有翻译数据切换模式
         await translationRenderer.switchMode(newMode, currentTextNodes, currentTranslations);
       }
     }
 
     notifyStatusChange('modeChanged', newMode);
-    console.log(`Mode switch completed: ${newMode}`);
   } catch (error) {
-    console.error('Mode switch failed:', error);
     throw error;
   }
 }
@@ -430,7 +410,6 @@ function setupLinkClickHandler() {
 
       // 如果当前正在翻译，停止翻译
       if (isTranslating) {
-        console.log('Link clicked during translation, stopping translation process');
         isTranslating = false;
       }
 
@@ -449,7 +428,6 @@ function notifyStatusChange(status, data = null) {
   try {
     // Check if extension context is still valid
     if (!chrome.runtime || !chrome.runtime.sendMessage) {
-      console.warn('Extension context invalidated, cannot send status update');
       return;
     }
 
@@ -459,17 +437,10 @@ function notifyStatusChange(status, data = null) {
       data: data,
       url: window.location.href
     }).catch((error) => {
-      // Handle different types of errors
-      if (error.message && error.message.includes('Extension context invalidated')) {
-        console.warn('Extension context invalidated:', error);
-      } else if (error.message && error.message.includes('Receiving end does not exist')) {
-        console.warn('Background script not available:', error);
-      } else {
-        console.warn('Failed to send status update:', error);
-      }
+      // Handle different types of errors silently
     });
   } catch (error) {
-    console.warn('Error in notifyStatusChange:', error);
+    // Handle errors silently
   }
 }
 
@@ -483,7 +454,7 @@ function setupContentObserver() {
     window.otContentChangeTimeout = setTimeout(() => {
       if (isTranslated) {
         // Re-translate new content
-        handleTranslateRequest({ forceRefresh: true }).catch(console.error);
+        handleTranslateRequest({ forceRefresh: true }).catch(() => {});
       }
     }, 1000);
   });
@@ -547,9 +518,6 @@ window.addEventListener('load', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     // Page is hidden, pause any ongoing operations
-    if (isTranslating) {
-      console.log('Page hidden during translation');
-    }
   } else {
     // Page is visible again, reset navigation state
     isNavigating = false;

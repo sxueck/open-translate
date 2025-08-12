@@ -19,8 +19,6 @@ async function initialize() {
 
     // Set up event listeners
     setupEventListeners();
-
-    console.log('Options page initialized successfully');
   } catch (error) {
     errorHandler.handle(error, 'options-initialize');
     showStatusMessage(ERROR_MESSAGES.TRANSLATION_FAILED, 'error');

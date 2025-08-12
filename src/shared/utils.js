@@ -220,7 +220,6 @@ async function measureTime(fn, label = 'Operation') {
   const start = performance.now();
   const result = await fn();
   const end = performance.now();
-  console.log(`${label} took ${(end - start).toFixed(2)} milliseconds`);
   return result;
 }
 
@@ -248,6 +247,29 @@ function isExtensionContextValid() {
   }
 }
 
+/**
+ * Check if content script is supported on the given URL
+ */
+function isContentScriptSupported(url) {
+  if (!url) return false;
+
+  // URLs where content scripts cannot be injected
+  const unsupportedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:', 'file:'];
+  const unsupportedPages = ['chrome.google.com/webstore'];
+
+  // Check protocol
+  if (unsupportedProtocols.some(protocol => url.startsWith(protocol))) {
+    return false;
+  }
+
+  // Check specific pages
+  if (unsupportedPages.some(page => url.includes(page))) {
+    return false;
+  }
+
+  return true;
+}
+
 // Export for different environments
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -270,7 +292,8 @@ if (typeof module !== 'undefined' && module.exports) {
     generateId,
     measureTime,
     createSafeEventListener,
-    isExtensionContextValid
+    isExtensionContextValid,
+    isContentScriptSupported
   };
 } else if (typeof window !== 'undefined') {
   Object.assign(window, {
@@ -293,6 +316,7 @@ if (typeof module !== 'undefined' && module.exports) {
     generateId,
     measureTime,
     createSafeEventListener,
-    isExtensionContextValid
+    isExtensionContextValid,
+    isContentScriptSupported
   });
 }

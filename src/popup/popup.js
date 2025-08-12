@@ -44,9 +44,7 @@ async function initialize() {
     // Update UI based on current state
     await updateUIState();
 
-    console.log('Popup initialized successfully');
   } catch (error) {
-    console.error('Failed to initialize popup:', error);
 
     // Use errorHandler if available, otherwise fallback to simple error display
     if (typeof errorHandler !== 'undefined') {
@@ -195,7 +193,6 @@ function handleUIStateError(error) {
     elements.translateBtn.disabled = true;
     elements.restoreBtn.disabled = true;
   } else if (error.message && error.message.includes('Extension context invalidated')) {
-    console.warn('Extension context invalidated');
     setStatus('error', 'Extension needs to be reloaded');
     elements.translateBtn.disabled = true;
     elements.restoreBtn.disabled = true;
@@ -207,9 +204,7 @@ function handleUIStateError(error) {
     updateButtonStates();
   } else {
     // Don't log connection errors as warnings since they're expected
-    if (!error.message || !error.message.includes('Could not establish connection')) {
-      console.warn('Failed to get translation status:', error);
-    }
+
     // Other errors - still allow translation attempt
     setStatus('ready', 'Ready to translate');
     isTranslated = false;
@@ -218,28 +213,7 @@ function handleUIStateError(error) {
   }
 }
 
-/**
- * Check if content script is supported on the given URL
- */
-function isContentScriptSupported(url) {
-  if (!url) return false;
 
-  // URLs where content scripts cannot be injected
-  const unsupportedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:', 'file:'];
-  const unsupportedPages = ['chrome.google.com/webstore'];
-
-  // Check protocol
-  if (unsupportedProtocols.some(protocol => url.startsWith(protocol))) {
-    return false;
-  }
-
-  // Check specific pages
-  if (unsupportedPages.some(page => url.includes(page))) {
-    return false;
-  }
-
-  return true;
-}
 
 /**
  * Send message with timeout to avoid hanging
@@ -307,7 +281,6 @@ async function handleTranslate() {
       throw new Error(response?.error || 'Translation failed');
     }
   } catch (error) {
-    console.error('Translation failed:', error);
     isTranslating = false;
 
     // Use errorHandler if available
@@ -395,7 +368,6 @@ async function handleRestore() {
     }
 
   } catch (error) {
-    console.error('Restore failed:', error);
     isTranslating = false;
 
     // Use errorHandler if available
@@ -429,8 +401,6 @@ async function handleModeChange() {
   const mode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
 
   try {
-    console.log(`User selected mode: ${mode}`);
-
     // 保存用户偏好
     await chrome.storage.sync.set({ translationMode: mode });
 
@@ -440,29 +410,22 @@ async function handleModeChange() {
     // 如果页面已翻译且支持内容脚本，发送模式切换消息
     if (isTranslated && isContentScriptSupported(currentTab.url)) {
       try {
-        console.log(`Sending mode switch to content script: ${mode}`);
         const response = await sendMessageWithTimeout(currentTab.id, {
           action: 'switchMode',
           mode: mode
         }, 5000);
 
         if (response && response.success) {
-          console.log(`Mode switch successful: ${mode}`);
           // 更新状态显示
           setStatus('translated', `Mode switched to ${mode === 'replace' ? 'Replace' : 'Bilingual'}`);
         } else {
-          console.warn('Failed to switch mode in content script:', response?.error);
           setStatus('error', 'Failed to switch mode');
         }
       } catch (error) {
-        console.warn('Failed to send mode change to content script:', error);
         setStatus('error', 'Failed to communicate with page');
       }
-    } else {
-      console.log('Page not translated or content script not supported, mode saved for next translation');
     }
   } catch (error) {
-    console.error('Mode change failed:', error);
     setStatus('error', 'Failed to change mode');
   }
 }
@@ -549,7 +512,6 @@ function showLoading(show) {
  */
 function showError(message) {
   // Simple error display - could be enhanced with toast notifications
-  console.error('Error:', message);
 }
 
 // Initialize popup when DOM is loaded

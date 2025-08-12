@@ -18,8 +18,6 @@ let extensionState = null;
  * Initialize background script
  */
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('Open Translate extension installed/updated');
-
   try {
     extensionState = {
       activeTranslations: new Map(),
@@ -34,7 +32,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
     createContextMenus();
     stateManager.setContextMenuCreated(true);
-    console.log('Background script initialized successfully');
 
   } catch (error) {
     errorHandler.handle(error, 'background-initialization', {
@@ -202,7 +199,7 @@ async function handleModeSwitch(mode, tab) {
       throw new Error(`Invalid translation mode: ${mode}`);
     }
 
-    console.log(`Background: Switching to mode ${mode} for tab ${tab.id}`);
+
 
     await chrome.storage.sync.set({ translationMode: mode });
 
@@ -216,16 +213,12 @@ async function handleModeSwitch(mode, tab) {
       });
 
       if (response && response.success) {
-        console.log(`Background: Mode switch successful for tab ${tab.id}`);
       } else {
-        console.warn('Background: Mode switch message failed:', response?.error);
       }
     } catch (error) {
-      console.warn('Background: Failed to send mode switch message:', error);
     }
 
   } catch (error) {
-    console.error('Background: Mode switch failed:', error);
     throw error;
   }
 }
@@ -276,7 +269,6 @@ async function handleBackgroundMessage(message, sender, sendResponse) {
         sendResponse({ success: false, error: 'Unknown action' });
     }
   } catch (error) {
-    console.error('Background message handling failed:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -359,7 +351,6 @@ async function getStoredConfig() {
 function cleanupInactiveTabs() {
   // Cleanup is now handled automatically by the StateManager
   // This function is kept for backward compatibility
-  console.log('Cleanup triggered - handled by StateManager');
 }
 
 /**

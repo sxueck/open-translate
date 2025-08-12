@@ -103,7 +103,6 @@ class TranslationService {
         throw new Error('Invalid models response format');
       }
     } catch (error) {
-      console.error('Failed to fetch available models:', error);
       // Return default models if API call fails
       return [
         { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', owned_by: 'openai' },
@@ -136,7 +135,6 @@ class TranslationService {
       const response = await this.makeAPIRequest(prompt);
       return this.extractTranslation(response);
     } catch (error) {
-      console.error('Translation failed:', error);
 
       // Provide more specific error messages
       if (error.name === 'AbortError') {
@@ -159,20 +157,8 @@ class TranslationService {
    * Build translation prompt for API
    */
   buildTranslationPrompt(text, targetLanguage, sourceLanguage) {
-    const languageMap = {
-      'zh-CN': 'Simplified Chinese',
-      'zh-TW': 'Traditional Chinese',
-      'en': 'English',
-      'ja': 'Japanese',
-      'ko': 'Korean',
-      'fr': 'French',
-      'de': 'German',
-      'es': 'Spanish',
-      'ru': 'Russian'
-    };
-
-    const targetLang = languageMap[targetLanguage] || targetLanguage;
-    const sourceLang = sourceLanguage === 'auto' ? 'the source language' : (languageMap[sourceLanguage] || sourceLanguage);
+    const targetLang = LANGUAGE_MAP[targetLanguage] || targetLanguage;
+    const sourceLang = sourceLanguage === 'auto' ? 'the source language' : (LANGUAGE_MAP[sourceLanguage] || sourceLanguage);
     const prompt = this.buildContextualPrompt(text, targetLang, sourceLang);
 
     return prompt;
@@ -193,6 +179,13 @@ class TranslationService {
       '5. For ambiguous terms, choose the most contextually appropriate translation',
       '6. Only return the translation without any additional text, explanation, or commentary'
     ];
+
+    // Add HTML handling instructions if text contains HTML
+    if (this.containsHtmlTags(text)) {
+      baseInstructions.push('7. The text contains HTML tags. Preserve all HTML tags and their structure exactly as they appear');
+      baseInstructions.push('8. Only translate the text content within HTML tags, not the tags themselves');
+      baseInstructions.push('9. Maintain the exact same HTML structure in the translation');
+    }
 
     // Add language-specific instructions
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
@@ -283,6 +276,14 @@ Translation:`;
     ];
 
     return technicalPatterns.some(pattern => pattern.test(text));
+  }
+
+  /**
+   * Check if text contains HTML tags
+   */
+  containsHtmlTags(text) {
+    if (!text || typeof text !== 'string') return false;
+    return /<[^>]+>/g.test(text);
   }
 
   /**
@@ -468,7 +469,6 @@ Translation:`;
         results.push(...splitResults);
       } catch (error) {
         // Fallback to individual translation on merge failure
-        console.warn('Merged translation failed, falling back to individual translation:', error);
         const fallbackResults = await this.fallbackToIndividualTranslation(batch, targetLanguage, sourceLanguage);
         results.push(...fallbackResults);
       }
@@ -535,6 +535,14 @@ Translation:`;
       '5. Each translation should be on a separate line with its corresponding number',
       '6. Only return the numbered translations without any additional text or commentary'
     ];
+
+    // Check if any text in the batch contains HTML
+    const hasHtml = batch.some(item => this.containsHtmlTags(item.text));
+    if (hasHtml) {
+      baseInstructions.push('7. Some segments contain HTML tags. Preserve all HTML tags and their structure exactly');
+      baseInstructions.push('8. Only translate the text content within HTML tags, not the tags themselves');
+      baseInstructions.push('9. Maintain the exact same HTML structure in each translation');
+    }
 
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
     const fullInstructions = [...baseInstructions, ...specificInstructions];
@@ -667,7 +675,8 @@ Translations:`;
             success: true,
             batchIndex: group.batchIndex !== undefined ? group.batchIndex : i,
             totalGroups: totalGroups,
-            processingTime: processingTime
+            processingTime: processingTime,
+            htmlContent: group.htmlContent || ''
           };
 
           // Real-time progress callback
@@ -675,13 +684,11 @@ Translations:`;
             try {
               await progressCallback(result, i + 1, totalGroups);
             } catch (callbackError) {
-              console.warn('Progress callback error:', callbackError);
             }
           }
 
           return result;
         } catch (error) {
-          console.error(`Translation failed for paragraph ${group.id}:`, error);
           const result = {
             id: group.id,
             container: group.container,
@@ -690,14 +697,14 @@ Translations:`;
             error: error.message,
             success: false,
             batchIndex: group.batchIndex !== undefined ? group.batchIndex : i,
-            totalGroups: totalGroups
+            totalGroups: totalGroups,
+            htmlContent: group.htmlContent || ''
           };
 
           if (progressCallback && typeof progressCallback === 'function') {
             try {
               await progressCallback(result, i + 1, totalGroups);
             } catch (callbackError) {
-              console.warn('Progress callback error:', callbackError);
             }
           }
 
@@ -797,7 +804,6 @@ Translations:`;
           }
         }
       } catch (error) {
-        console.warn('Merged group translation failed, falling back to individual translation:', error);
         const fallbackResults = await this.fallbackToIndividualGroupTranslation(batch, targetLanguage, sourceLanguage, progressCallback);
         results.push(...fallbackResults);
       }
@@ -865,6 +871,14 @@ Translations:`;
       '6. Only return the numbered translations without any additional text or commentary'
     ];
 
+    // Check if any group contains HTML
+    const hasHtml = batch.some(group => this.containsHtmlTags(group.combinedText));
+    if (hasHtml) {
+      baseInstructions.push('7. Some segments contain HTML tags. Preserve all HTML tags and their structure exactly');
+      baseInstructions.push('8. Only translate the text content within HTML tags, not the tags themselves');
+      baseInstructions.push('9. Maintain the exact same HTML structure in each translation');
+    }
+
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
     const fullInstructions = [...baseInstructions, ...specificInstructions];
 
@@ -919,7 +933,8 @@ Translations:`;
         batchIndex: group.batchIndex,
         totalGroups: batch.length,
         processingTime: 0,
-        isMerged: true
+        isMerged: true,
+        htmlContent: group.htmlContent || ''
       };
 
       results.push(result);
@@ -950,7 +965,8 @@ Translations:`;
           batchIndex: group.batchIndex,
           totalGroups: batch.length,
           processingTime: processingTime,
-          isMerged: false
+          isMerged: false,
+          htmlContent: group.htmlContent || ''
         };
 
         results.push(result);
@@ -968,7 +984,8 @@ Translations:`;
           success: false,
           batchIndex: group.batchIndex,
           totalGroups: batch.length,
-          isMerged: false
+          isMerged: false,
+          htmlContent: group.htmlContent || ''
         };
 
         results.push(result);

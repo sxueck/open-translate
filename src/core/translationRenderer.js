@@ -23,7 +23,6 @@ class TranslationRenderer {
   setMode(mode) {
     // 验证模式有效性
     if (!['replace', 'paragraph-bilingual'].includes(mode)) {
-      console.warn(`Invalid translation mode: ${mode}. Using 'replace' as fallback.`);
       this.translationMode = 'replace';
       return;
     }
@@ -74,7 +73,6 @@ class TranslationRenderer {
       }
 
     } catch (error) {
-      console.error('Failed to render single result:', error);
     }
   }
   /**
@@ -173,7 +171,6 @@ class TranslationRenderer {
     });
 
     this.lastCleanup = now;
-    console.log(`Memory cleanup completed. Removed ${staleNodes.length} stale nodes and ${staleElements.length} stale elements.`);
   }
 
   /**
@@ -184,13 +181,11 @@ class TranslationRenderer {
 
     // 验证容器是否存在
     if (!container || !container.parentElement) {
-      console.warn('Invalid container for bilingual display:', container);
       return;
     }
 
     // 跳过非内容区域的容器
     if (this.isInNonContentArea(container)) {
-      console.log('Skipping non-content area:', container.tagName, container.className);
       return;
     }
 
@@ -198,13 +193,11 @@ class TranslationRenderer {
     if (container.classList.contains('ot-paragraph-bilingual') ||
         container.querySelector('.ot-paragraph-bilingual') ||
         this.translatedElements.has(container)) {
-      console.log('Skipping already translated container:', container);
       return;
     }
 
     // 检查容器内是否已有翻译内容
     if (container.querySelector('.ot-paragraph-translated')) {
-      console.log('Container already has bilingual content:', container);
       return;
     }
 
@@ -229,7 +222,16 @@ class TranslationRenderer {
     // Create translated content section only
     const translatedSection = document.createElement('div');
     translatedSection.className = 'ot-paragraph-translated';
-    translatedSection.textContent = result.translation;
+
+    // Handle HTML content in translation if available
+    if (this.containsHtmlTags(result.translation)) {
+      // If translation contains HTML tags, render as HTML
+      translatedSection.innerHTML = this.sanitizeHtml(result.translation);
+    } else {
+      // Otherwise, render as plain text
+      translatedSection.textContent = result.translation;
+    }
+
     translatedSection.setAttribute('lang', 'zh-CN');
 
     // 确保译文元素可见
@@ -252,12 +254,7 @@ class TranslationRenderer {
       this.originalTexts.set(container, originalContent);
     }
 
-    console.log('Bilingual display created successfully:', {
-      container: container.tagName,
-      originalText: originalText.substring(0, 50) + '...',
-      translation: result.translation.substring(0, 50) + '...',
-      translatedSectionAdded: !!container.querySelector('.ot-paragraph-translated')
-    });
+
   }
 
 
@@ -278,6 +275,47 @@ class TranslationRenderer {
     } else {
       return 'en';
     }
+  }
+
+  /**
+   * Check if text contains HTML tags
+   */
+  containsHtmlTags(text) {
+    if (!text || typeof text !== 'string') return false;
+    return /<[^>]+>/g.test(text);
+  }
+
+  /**
+   * Sanitize HTML content for safe rendering
+   */
+  sanitizeHtml(html) {
+    if (!html || typeof html !== 'string') return '';
+
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+
+    // Remove potentially dangerous elements and attributes
+    const dangerousElements = tempDiv.querySelectorAll('script, style, iframe, object, embed');
+    dangerousElements.forEach(el => el.remove());
+
+    // Remove dangerous attributes
+    const allElements = tempDiv.querySelectorAll('*');
+    allElements.forEach(el => {
+      const dangerousAttrs = ['onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur'];
+      dangerousAttrs.forEach(attr => {
+        if (el.hasAttribute(attr)) {
+          el.removeAttribute(attr);
+        }
+      });
+
+      // Remove javascript: links
+      if (el.hasAttribute('href') && el.getAttribute('href').startsWith('javascript:')) {
+        el.removeAttribute('href');
+      }
+    });
+
+    return tempDiv.innerHTML;
   }
 
   /**
@@ -490,18 +528,15 @@ class TranslationRenderer {
   async switchMode(newMode, textNodes, translations) {
     // 验证新模式的有效性
     if (!['replace', 'paragraph-bilingual'].includes(newMode)) {
-      console.error(`Invalid mode for switchMode: ${newMode}`);
       return;
     }
 
     // 如果模式相同，无需切换
     if (this.translationMode === newMode) {
-      console.log(`Already in ${newMode} mode, no switch needed`);
       return;
     }
 
     const oldMode = this.translationMode;
-    console.log(`Switching from ${oldMode} to ${newMode} mode`);
 
     // 先恢复原始状态
     this.restoreOriginalText();
@@ -512,8 +547,6 @@ class TranslationRenderer {
     // 根据新模式重新渲染
     if (newMode === 'replace' && textNodes && translations) {
       this.renderReplaceMode(textNodes, translations);
-    } else if (newMode === 'paragraph-bilingual') {
-      console.log('Switching to paragraph-bilingual mode requires re-translation');
     }
   }
 

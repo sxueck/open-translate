@@ -137,7 +137,6 @@ class TextExtractor {
     for (const selector of DOM_SELECTORS.MAIN_CONTENT_SELECTORS) {
       const element = rootElement.querySelector(selector);
       if (element && this.hasSignificantContent(element)) {
-        console.log(`Found main content area: ${selector}`);
         return element;
       }
     }
@@ -181,7 +180,6 @@ class TextExtractor {
     candidates.sort((a, b) => b.score - a.score);
 
     if (candidates.length > 0) {
-      console.log(`Found main content by heuristics: ${candidates[0].element.tagName}.${candidates[0].element.className}`);
       return candidates[0].element;
     }
 
@@ -644,6 +642,7 @@ class TextExtractor {
           container: paragraph,
           textNodes: [],
           combinedText: '',
+          htmlContent: '',
           priority: this.getParagraphPriority(paragraph)
         });
       }
@@ -651,6 +650,17 @@ class TextExtractor {
       const group = paragraphGroups.get(paragraphId);
       group.textNodes.push(textNode);
       group.combinedText += (group.combinedText ? ' ' : '') + textNode.text;
+    });
+
+    // Extract HTML content for each group to preserve structure
+    paragraphGroups.forEach(group => {
+      group.htmlContent = this.extractHtmlContent(group.container);
+
+      // If the container has HTML content that differs significantly from plain text,
+      // use the HTML content for translation to preserve structure
+      if (group.htmlContent && this.shouldUseHtmlContent(group.container, group.combinedText)) {
+        group.combinedText = this.extractTextFromHtml(group.htmlContent);
+      }
     });
 
     // Convert to array and handle large groups
@@ -733,6 +743,108 @@ class TextExtractor {
     }
 
     return element;
+  }
+
+  /**
+   * Extract HTML content while preserving structure for translation
+   */
+  extractHtmlContent(container) {
+    if (!container) return '';
+
+    // Clone the container to avoid modifying the original
+    const clone = container.cloneNode(true);
+
+    // Remove any existing translation elements
+    const existingTranslations = clone.querySelectorAll('.ot-paragraph-translated, .ot-bilingual-container');
+    existingTranslations.forEach(el => el.remove());
+
+    // Get the inner HTML which preserves the structure
+    return clone.innerHTML.trim();
+  }
+
+  /**
+   * Check if we should use HTML content instead of plain text for translation
+   */
+  shouldUseHtmlContent(container, plainText) {
+    if (!container || !plainText) return false;
+
+    // Check if container has significant HTML structure
+    const htmlElements = container.querySelectorAll('a, code, span, strong, em, b, i, u, mark, sup, sub');
+    if (htmlElements.length === 0) return false;
+
+    // Check if any of these elements contain significant text
+    let hasSignificantHtmlText = false;
+    htmlElements.forEach(el => {
+      const text = el.textContent.trim();
+      if (text.length > 0 && hasSignificantText(text)) {
+        hasSignificantHtmlText = true;
+      }
+    });
+
+    return hasSignificantHtmlText;
+  }
+
+  /**
+   * Extract text from HTML while preserving inline tags
+   */
+  extractTextFromHtml(htmlContent) {
+    if (!htmlContent) return '';
+
+    // Create a temporary element to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+
+    // Get text content but preserve important inline tags
+    return this.getTextWithInlineTags(tempDiv);
+  }
+
+  /**
+   * Get text content while preserving important inline HTML tags
+   */
+  getTextWithInlineTags(element) {
+    let result = '';
+
+    for (const node of element.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        result += node.textContent;
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const tagName = node.tagName.toLowerCase();
+
+        // Preserve important inline tags
+        if (['a', 'code', 'span', 'strong', 'em', 'b', 'i', 'u', 'mark', 'sup', 'sub'].includes(tagName)) {
+          const attributes = this.getImportantAttributes(node);
+          const innerText = this.getTextWithInlineTags(node);
+
+          if (innerText.trim()) {
+            result += `<${tagName}${attributes}>${innerText}</${tagName}>`;
+          }
+        } else {
+          // For other elements, just get the text content
+          result += this.getTextWithInlineTags(node);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get important attributes from an element
+   */
+  getImportantAttributes(element) {
+    const importantAttrs = ['href', 'title', 'class'];
+    let attrs = '';
+
+    importantAttrs.forEach(attr => {
+      if (element.hasAttribute(attr)) {
+        const value = element.getAttribute(attr);
+        if (value) {
+          attrs += ` ${attr}="${value}"`;
+        }
+      }
+    });
+
+    return attrs;
   }
 
   /**

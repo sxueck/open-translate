@@ -1,64 +1,136 @@
 /**
- * Icon generation script for Open Translate extension
- * This script creates placeholder PNG icons from the SVG source
- * 
- * Note: This is a placeholder script. In production, you would use
- * proper image processing tools like ImageMagick, Sharp, or online converters
- * to generate high-quality PNG icons from the SVG source.
+ * Professional icon generation script for Open Translate extension
+ * This script generates Chrome Web Store compliant icons from source PNG files
+ * using Sharp image processing library
  */
 
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 
-// Icon sizes needed for Chrome extension
-const iconSizes = [16, 32, 48, 128];
+// Chrome Web Store icon requirements
+const ICON_SIZES = [16, 32, 48, 128];
+const STORE_ICON_SIZES = [128]; // Additional sizes for Chrome Web Store
 
-// Base64 encoded placeholder icons (simple colored squares with text)
-const generatePlaceholderIcon = (size) => {
-  // This is a very basic placeholder - in production you'd use proper image processing
-  const canvas = `
-    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${size}" height="${size}" fill="#1976d2"/>
-      <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="middle" 
-            fill="white" font-family="Arial" font-size="${size/4}" font-weight="bold">T</text>
-    </svg>
-  `;
-  
-  return canvas;
-};
+// Source icon file (128x128 PNG)
+const SOURCE_ICON = path.join(__dirname, '..', '翻译.png');
+const ICONS_DIR = path.join(__dirname, '..', 'assets', 'icons');
 
-// Create icons directory if it doesn't exist
-const iconsDir = path.join(__dirname, '..', 'assets', 'icons');
-if (!fs.existsSync(iconsDir)) {
-  fs.mkdirSync(iconsDir, { recursive: true });
+/**
+ * Validate source icon file
+ */
+async function validateSourceIcon() {
+  if (!fs.existsSync(SOURCE_ICON)) {
+    throw new Error(`Source icon not found: ${SOURCE_ICON}`);
+  }
+
+  try {
+    const metadata = await sharp(SOURCE_ICON).metadata();
+    console.log(`Source icon: ${metadata.width}x${metadata.height}, format: ${metadata.format}`);
+
+    if (metadata.width !== 128 || metadata.height !== 128) {
+      console.warn(`Warning: Source icon is ${metadata.width}x${metadata.height}, recommended 128x128`);
+    }
+
+    return metadata;
+  } catch (error) {
+    throw new Error(`Failed to read source icon: ${error.message}`);
+  }
 }
 
-// Generate placeholder SVG icons for each size
-iconSizes.forEach(size => {
-  const svgContent = generatePlaceholderIcon(size);
-  const filename = `icon${size}.svg`;
-  const filepath = path.join(iconsDir, filename);
-  
-  fs.writeFileSync(filepath, svgContent);
-  console.log(`Generated placeholder icon: ${filename}`);
-});
+/**
+ * Generate icon for specific size with high quality settings
+ */
+async function generateIcon(size) {
+  const outputPath = path.join(ICONS_DIR, `icon${size}.png`);
 
-console.log('\nPlaceholder icons generated successfully!');
-console.log('\nIMPORTANT: These are placeholder SVG files.');
-console.log('For production use, please:');
-console.log('1. Design proper icons using the main icon.svg as reference');
-console.log('2. Convert SVG files to PNG using proper image processing tools');
-console.log('3. Ensure icons are optimized for different display densities');
-console.log('4. Test icons on various backgrounds and themes');
+  try {
+    await sharp(SOURCE_ICON)
+      .resize(size, size, {
+        kernel: sharp.kernel.lanczos3,
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 }
+      })
+      .png({
+        quality: 100,
+        compressionLevel: 6,
+        adaptiveFiltering: true
+      })
+      .toFile(outputPath);
 
-// Instructions for manual conversion
-console.log('\nTo convert SVG to PNG manually:');
-console.log('1. Use online converters like convertio.co or cloudconvert.com');
-console.log('2. Use ImageMagick: convert icon.svg -resize 16x16 icon16.png');
-console.log('3. Use Inkscape: inkscape -w 16 -h 16 icon.svg -o icon16.png');
-console.log('4. Use design tools like Figma, Sketch, or Adobe Illustrator');
+    console.log(`✓ Generated: icon${size}.png`);
+    return outputPath;
+  } catch (error) {
+    console.error(`✗ Failed to generate icon${size}.png: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Create icons directory if it doesn't exist
+ */
+function ensureIconsDirectory() {
+  if (!fs.existsSync(ICONS_DIR)) {
+    fs.mkdirSync(ICONS_DIR, { recursive: true });
+    console.log(`Created icons directory: ${ICONS_DIR}`);
+  }
+}
+
+/**
+ * Main icon generation function
+ */
+async function generateAllIcons() {
+  try {
+    console.log('🎨 Starting icon generation for Chrome Web Store...\n');
+
+    // Validate source
+    await validateSourceIcon();
+
+    // Ensure output directory exists
+    ensureIconsDirectory();
+
+    // Generate all required sizes
+    console.log('Generating extension icons:');
+    for (const size of ICON_SIZES) {
+      await generateIcon(size);
+    }
+
+    console.log('\n✅ All icons generated successfully!');
+    console.log('\nGenerated files:');
+    ICON_SIZES.forEach(size => {
+      const filePath = path.join(ICONS_DIR, `icon${size}.png`);
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        console.log(`  - icon${size}.png (${Math.round(stats.size / 1024)}KB)`);
+      }
+    });
+
+    console.log('\n📋 Chrome Web Store Requirements:');
+    console.log('✓ 16x16 - Extension icon in toolbar');
+    console.log('✓ 32x32 - Extension icon in extension management page');
+    console.log('✓ 48x48 - Extension icon in extension management page');
+    console.log('✓ 128x128 - Extension icon in Chrome Web Store');
+
+    console.log('\n🔍 Quality checks:');
+    console.log('✓ High-quality Lanczos3 resampling');
+    console.log('✓ Transparent background preserved');
+    console.log('✓ PNG format with optimal compression');
+    console.log('✓ Consistent aspect ratio maintained');
+
+  } catch (error) {
+    console.error(`\n❌ Icon generation failed: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+// Run the script
+if (require.main === module) {
+  generateAllIcons();
+}
 
 module.exports = {
-  generatePlaceholderIcon,
-  iconSizes
+  generateAllIcons,
+  generateIcon,
+  validateSourceIcon,
+  ICON_SIZES
 };

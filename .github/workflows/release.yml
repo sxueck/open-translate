@@ -116,20 +116,18 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          open-translate-*.crx
           open-translate-*.zip
         body_path: release-notes.md
         draft: false
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: extension-packages
         path: |
-          open-translate-*.crx
           open-translate-*.zip
-          extension.pem
+          dist/extension/**
         retention-days: 30

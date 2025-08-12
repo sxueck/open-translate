@@ -21,8 +21,12 @@ class ConfigManager {
       autoTranslate: false,
       preserveFormatting: true,
       excludeSelectors: 'script\nstyle\nnoscript\ncode\npre\nkbd\nsamp\nvar\n.notranslate\n[translate="no"]',
-      batchSize: 5,
-      retryAttempts: 2
+      batchSize: 8,
+      retryAttempts: 2,
+      enableMerge: true,
+      shortTextThreshold: 50,
+      maxMergedLength: 1000,
+      maxMergedCount: 10
     };
 
     this.storageKeys = [
@@ -34,7 +38,11 @@ class ConfigManager {
       'preserveFormatting',
       'excludeSelectors',
       'batchSize',
-      'retryAttempts'
+      'retryAttempts',
+      'enableMerge',
+      'shortTextThreshold',
+      'maxMergedLength',
+      'maxMergedCount'
     ];
   }
 
@@ -129,9 +137,26 @@ class ConfigManager {
       }
     }
 
-    // Validate batch size
+    // Validate batch size - only ensure it's a positive integer
     if (validated.batchSize !== undefined) {
-      validated.batchSize = Math.max(1, Math.min(20, parseInt(validated.batchSize) || 5));
+      validated.batchSize = Math.max(1, parseInt(validated.batchSize) || 5);
+    }
+
+    // Validate merge configuration
+    if (validated.enableMerge !== undefined) {
+      validated.enableMerge = Boolean(validated.enableMerge);
+    }
+
+    if (validated.shortTextThreshold !== undefined) {
+      validated.shortTextThreshold = Math.max(10, Math.min(200, parseInt(validated.shortTextThreshold) || 50));
+    }
+
+    if (validated.maxMergedLength !== undefined) {
+      validated.maxMergedLength = Math.max(100, Math.min(5000, parseInt(validated.maxMergedLength) || 1000));
+    }
+
+    if (validated.maxMergedCount !== undefined) {
+      validated.maxMergedCount = Math.max(2, Math.min(20, parseInt(validated.maxMergedCount) || 10));
     }
 
     // Validate retry attempts
@@ -175,7 +200,11 @@ class ConfigManager {
         return {
           ...fullConfig.translationConfig,
           batchSize: fullConfig.batchSize,
-          retryAttempts: fullConfig.retryAttempts
+          retryAttempts: fullConfig.retryAttempts,
+          enableMerge: fullConfig.enableMerge,
+          shortTextThreshold: fullConfig.shortTextThreshold,
+          maxMergedLength: fullConfig.maxMergedLength,
+          maxMergedCount: fullConfig.maxMergedCount
         };
       case 'extractor':
         return {

@@ -21,6 +21,13 @@ class TranslationRenderer {
    * Set translation mode
    */
   setMode(mode) {
+    // 验证模式有效性
+    if (!['replace', 'paragraph-bilingual'].includes(mode)) {
+      console.warn(`Invalid translation mode: ${mode}. Using 'replace' as fallback.`);
+      this.translationMode = 'replace';
+      return;
+    }
+
     this.translationMode = mode;
   }
 
@@ -40,22 +47,28 @@ class TranslationRenderer {
   /**
    * Render single translation result immediately (real-time rendering)
    */
-  renderSingleResult(result, mode = 'paragraph-bilingual') {
+  renderSingleResult(result, mode = null) {
     if (!result.success || !result.textNodes) {
       return;
     }
 
     try {
-      const actualMode = mode || this.translationMode || 'paragraph-bilingual';
+      // 优先使用传入的模式，否则使用当前设置的模式
+      const actualMode = mode !== null ? mode : this.translationMode;
 
-      if (actualMode === 'replace') {
+      // 确保模式有效，默认使用替换模式以保持向后兼容
+      const validMode = ['replace', 'paragraph-bilingual'].includes(actualMode)
+        ? actualMode
+        : 'replace';
+
+      if (validMode === 'replace') {
         result.textNodes.forEach(textNode => {
           // Additional validation before processing
           if (textNode.node && textNode.node.parentElement) {
             this.replaceTextContent(textNode, result.translation);
           }
         });
-      } else if (actualMode === 'paragraph-bilingual') {
+      } else if (validMode === 'paragraph-bilingual') {
         this.ensureBilingualStyles();
         this.createParagraphBilingualDisplay(result);
       }
@@ -309,9 +322,9 @@ class TranslationRenderer {
         margin-top: 8px;
         padding: 0;
         color: inherit;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+        font-family: BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'Noto Sans';
         font-size: inherit;
-        font-weight: 400;
+        font-weight: 350;
         font-style: normal;
         line-height: 1.6;
         letter-spacing: 0.02em;
@@ -333,9 +346,10 @@ class TranslationRenderer {
         }
 
         .ot-paragraph-translated {
-          margin-top: 6px;
+          margin-top: 8px;
           line-height: 1.5;
           font-size: 0.95em;
+          font-weight: 350;
         }
       }
 
@@ -358,8 +372,13 @@ class TranslationRenderer {
       @media (prefers-contrast: high) {
         .ot-paragraph-translated {
           opacity: 1;
-          font-weight: 500;
+          font-weight: 350;
         }
+      }
+
+      /* 仅显示原文模式 */
+      .ot-paragraph-bilingual.ot-original-only .ot-paragraph-translated {
+        display: none !important;
       }
     `;
 
@@ -370,26 +389,40 @@ class TranslationRenderer {
    * Restore original text content
    */
   restoreOriginalText() {
-    // Remove translation content from bilingual containers and restore original state
+    // Restore bilingual containers to their original HTML content
+    this.originalTexts.forEach((originalContent, element) => {
+      if (element.parentElement) {
+        // Check if this is a container element (has innerHTML stored)
+        if (element.classList && element.classList.contains('ot-paragraph-bilingual')) {
+          // Restore original HTML content for bilingual containers
+          element.innerHTML = originalContent;
+
+          // Remove bilingual classes and attributes
+          element.classList.remove('ot-paragraph-bilingual');
+          element.removeAttribute('data-original-lang');
+          element.removeAttribute('data-translated-lang');
+          element.removeAttribute('aria-label');
+          element.removeAttribute('role');
+        } else if (typeof originalContent === 'string') {
+          // Restore text content for text nodes
+          element.textContent = originalContent;
+        }
+      }
+    });
+
+    // Remove any remaining bilingual containers that might not have been tracked
     document.querySelectorAll('.ot-paragraph-bilingual').forEach(container => {
       const translatedSection = container.querySelector('.ot-paragraph-translated');
       if (translatedSection) {
         translatedSection.remove();
       }
 
-      // 移除双语标记和属性
+      // Remove bilingual classes and attributes
       container.classList.remove('ot-paragraph-bilingual');
       container.removeAttribute('data-original-lang');
       container.removeAttribute('data-translated-lang');
       container.removeAttribute('aria-label');
       container.removeAttribute('role');
-    });
-
-    // Restore replaced text nodes
-    this.originalTexts.forEach((originalText, node) => {
-      if (node.parentElement && typeof originalText === 'string') {
-        node.textContent = originalText;
-      }
     });
 
     // Clear tracking data
@@ -402,6 +435,33 @@ class TranslationRenderer {
       style.remove();
       this.styleInjected = false;
     }
+  }
+
+  showOriginalOnly() {
+    // Hide translated sections in bilingual containers
+    document.querySelectorAll('.ot-paragraph-bilingual .ot-paragraph-translated').forEach(translatedSection => {
+      translatedSection.style.display = 'none';
+    });
+
+    // Add a class to indicate original-only mode
+    document.querySelectorAll('.ot-paragraph-bilingual').forEach(container => {
+      container.classList.add('ot-original-only');
+    });
+  }
+
+  /**
+   * Show both original and translated text in bilingual mode
+   */
+  showBilingual() {
+    // Show translated sections in bilingual containers
+    document.querySelectorAll('.ot-paragraph-bilingual .ot-paragraph-translated').forEach(translatedSection => {
+      translatedSection.style.display = '';
+    });
+
+    // Remove original-only mode class
+    document.querySelectorAll('.ot-paragraph-bilingual').forEach(container => {
+      container.classList.remove('ot-original-only');
+    });
   }
 
   /**
@@ -428,16 +488,29 @@ class TranslationRenderer {
    * Update translation mode and re-render if needed
    */
   async switchMode(newMode, textNodes, translations) {
-    if (this.translationMode === newMode) return;
+    // 验证新模式的有效性
+    if (!['replace', 'paragraph-bilingual'].includes(newMode)) {
+      console.error(`Invalid mode for switchMode: ${newMode}`);
+      return;
+    }
 
-    // Restore original state first
+    // 如果模式相同，无需切换
+    if (this.translationMode === newMode) {
+      console.log(`Already in ${newMode} mode, no switch needed`);
+      return;
+    }
+
+    const oldMode = this.translationMode;
+    console.log(`Switching from ${oldMode} to ${newMode} mode`);
+
+    // 先恢复原始状态
     this.restoreOriginalText();
-    
-    // Set new mode
+
+    // 设置新模式
     this.setMode(newMode);
-    
-    // Re-render with new mode
-    if (newMode === 'replace') {
+
+    // 根据新模式重新渲染
+    if (newMode === 'replace' && textNodes && translations) {
       this.renderReplaceMode(textNodes, translations);
     } else if (newMode === 'paragraph-bilingual') {
       console.log('Switching to paragraph-bilingual mode requires re-translation');

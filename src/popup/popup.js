@@ -154,10 +154,18 @@ async function updateUIState() {
       throw new Error('Extension context invalidated');
     }
 
-    // Get translation status from content script
-    const response = await chrome.tabs.sendMessage(currentTab.id, {
+    // Check if current tab is valid and supports content scripts
+    if (!currentTab || !currentTab.id || !isContentScriptSupported(currentTab.url)) {
+      setStatus('unavailable', 'Translation not available on this page');
+      elements.translateBtn.disabled = true;
+      elements.restoreBtn.disabled = true;
+      return;
+    }
+
+    // Get translation status from content script with timeout
+    const response = await sendMessageWithTimeout(currentTab.id, {
       action: 'getStatus'
-    });
+    }, 2000);
 
     if (response && response.success) {
       isTranslated = response.isTranslated;
@@ -173,25 +181,84 @@ async function updateUIState() {
       updateButtonStates();
     }
   } catch (error) {
-    console.warn('Failed to get translation status:', error);
-
-    if (error.message && error.message.includes('Extension context invalidated')) {
-      setStatus('error', 'Extension needs to be reloaded');
-      elements.translateBtn.disabled = true;
-      elements.restoreBtn.disabled = true;
-    } else if (error.message && error.message.includes('Receiving end does not exist')) {
-      // Content script not available (e.g., on chrome:// pages)
-      setStatus('unavailable', 'Translation not available on this page');
-      elements.translateBtn.disabled = true;
-      elements.restoreBtn.disabled = true;
-    } else {
-      // Other errors - still allow translation attempt
-      setStatus('ready', 'Ready to translate');
-      isTranslated = false;
-      isTranslating = false;
-      updateButtonStates();
-    }
+    handleUIStateError(error);
   }
+}
+
+/**
+ * Handle errors in UI state update
+ */
+function handleUIStateError(error) {
+  // Don't log "Receiving end does not exist" as an error since it's expected on some pages
+  if (error.message && error.message.includes('Receiving end does not exist')) {
+    setStatus('unavailable', 'Translation not available on this page');
+    elements.translateBtn.disabled = true;
+    elements.restoreBtn.disabled = true;
+  } else if (error.message && error.message.includes('Extension context invalidated')) {
+    console.warn('Extension context invalidated');
+    setStatus('error', 'Extension needs to be reloaded');
+    elements.translateBtn.disabled = true;
+    elements.restoreBtn.disabled = true;
+  } else if (error.message && error.message.includes('timeout')) {
+    // Content script might be loading, allow translation attempt
+    setStatus('ready', 'Ready to translate');
+    isTranslated = false;
+    isTranslating = false;
+    updateButtonStates();
+  } else {
+    // Don't log connection errors as warnings since they're expected
+    if (!error.message || !error.message.includes('Could not establish connection')) {
+      console.warn('Failed to get translation status:', error);
+    }
+    // Other errors - still allow translation attempt
+    setStatus('ready', 'Ready to translate');
+    isTranslated = false;
+    isTranslating = false;
+    updateButtonStates();
+  }
+}
+
+/**
+ * Check if content script is supported on the given URL
+ */
+function isContentScriptSupported(url) {
+  if (!url) return false;
+
+  // URLs where content scripts cannot be injected
+  const unsupportedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:', 'file:'];
+  const unsupportedPages = ['chrome.google.com/webstore'];
+
+  // Check protocol
+  if (unsupportedProtocols.some(protocol => url.startsWith(protocol))) {
+    return false;
+  }
+
+  // Check specific pages
+  if (unsupportedPages.some(page => url.includes(page))) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Send message with timeout to avoid hanging
+ */
+async function sendMessageWithTimeout(tabId, message, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Message timeout'));
+    }, timeoutMs);
+
+    chrome.tabs.sendMessage(tabId, message, (response) => {
+      clearTimeout(timeout);
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(response);
+      }
+    });
+  });
 }
 
 /**
@@ -211,19 +278,31 @@ async function handleTranslate() {
     setStatus('translating', 'Translating page...');
     updateButtonStates();
 
-    const response = await chrome.tabs.sendMessage(currentTab.id, {
+
+
+    // Check if content script is supported
+    if (!isContentScriptSupported(currentTab.url)) {
+      throw new Error('Translation not available on this page');
+    }
+
+    const response = await sendMessageWithTimeout(currentTab.id, {
       action: 'translate',
       options: {
         sourceLanguage: elements.sourceLanguage.value,
         targetLanguage: elements.targetLanguage.value
       }
-    });
+    }, 60000); // Longer timeout for translation
 
     if (response && response.success) {
       isTranslated = response.translated;
       isTranslating = false;
       setStatus('translated', 'Page translated successfully');
       updateButtonStates();
+
+      // Close popup after successful translation
+      setTimeout(() => {
+        window.close();
+      }, 1000);
     } else {
       throw new Error(response?.error || 'Translation failed');
     }
@@ -265,21 +344,56 @@ async function handleRestore() {
       throw new Error('Extension context invalidated. Please reload the extension.');
     }
 
-    showLoading(true);
-    setStatus('restoring', 'Restoring original text...');
-
-    const response = await chrome.tabs.sendMessage(currentTab.id, {
-      action: 'restore'
-    });
-
-    if (response && response.success) {
-      isTranslated = false;
-      isTranslating = false;
-      setStatus('restored', 'Original text restored');
-      updateButtonStates();
-    } else {
-      throw new Error(response?.error || 'Restore failed');
+    // Check if content script is supported
+    if (!isContentScriptSupported(currentTab.url)) {
+      throw new Error('Restore not available on this page');
     }
+
+    showLoading(true);
+
+    // Check current mode to determine restore behavior
+    const mode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
+
+    if (mode === 'paragraph-bilingual') {
+      // In bilingual mode, toggle between showing original only and showing both
+      const response = await sendMessageWithTimeout(currentTab.id, {
+        action: 'toggleBilingualView'
+      }, 10000);
+
+      if (response && response.success) {
+        if (response.showingOriginalOnly) {
+          setStatus('original-only', 'Showing original text only');
+          elements.restoreBtn.textContent = 'Show Translation';
+        } else {
+          setStatus('translated', 'Showing bilingual view');
+          elements.restoreBtn.textContent = 'Show Original Only';
+        }
+      } else {
+        throw new Error(response?.error || 'Toggle view failed');
+      }
+    } else {
+      // In replace mode, restore original text completely
+      setStatus('restoring', 'Restoring original text...');
+
+      const response = await sendMessageWithTimeout(currentTab.id, {
+        action: 'restore'
+      }, 10000);
+
+      if (response && response.success) {
+        isTranslated = false;
+        isTranslating = false;
+        setStatus('restored', 'Original text restored');
+        updateButtonStates();
+
+        // Close popup after successful restore
+        setTimeout(() => {
+          window.close();
+        }, 1000);
+      } else {
+        throw new Error(response?.error || 'Restore failed');
+      }
+    }
+
   } catch (error) {
     console.error('Restore failed:', error);
     isTranslating = false;
@@ -315,22 +429,41 @@ async function handleModeChange() {
   const mode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
 
   try {
-    // Save preference
+    console.log(`User selected mode: ${mode}`);
+
+    // 保存用户偏好
     await chrome.storage.sync.set({ translationMode: mode });
 
-    // Send mode change to content script if page is translated
-    if (isTranslated) {
-      const response = await chrome.tabs.sendMessage(currentTab.id, {
-        action: 'switchMode',
-        mode: mode
-      });
+    // 立即更新按钮状态
+    updateButtonStates();
 
-      if (!response || !response.success) {
-        console.error('Failed to switch mode:', response?.error);
+    // 如果页面已翻译且支持内容脚本，发送模式切换消息
+    if (isTranslated && isContentScriptSupported(currentTab.url)) {
+      try {
+        console.log(`Sending mode switch to content script: ${mode}`);
+        const response = await sendMessageWithTimeout(currentTab.id, {
+          action: 'switchMode',
+          mode: mode
+        }, 5000);
+
+        if (response && response.success) {
+          console.log(`Mode switch successful: ${mode}`);
+          // 更新状态显示
+          setStatus('translated', `Mode switched to ${mode === 'replace' ? 'Replace' : 'Bilingual'}`);
+        } else {
+          console.warn('Failed to switch mode in content script:', response?.error);
+          setStatus('error', 'Failed to switch mode');
+        }
+      } catch (error) {
+        console.warn('Failed to send mode change to content script:', error);
+        setStatus('error', 'Failed to communicate with page');
       }
+    } else {
+      console.log('Page not translated or content script not supported, mode saved for next translation');
     }
   } catch (error) {
     console.error('Mode change failed:', error);
+    setStatus('error', 'Failed to change mode');
   }
 }
 
@@ -385,6 +518,18 @@ function updateButtonStates() {
     elements.translateBtn.textContent = 'Translating...';
   } else {
     elements.translateBtn.textContent = 'Translate Page';
+  }
+
+  // Update restore button text based on mode
+  if (isTranslated && !isTranslating) {
+    const mode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
+    if (mode === 'paragraph-bilingual') {
+      elements.restoreBtn.textContent = 'Show Original Only';
+    } else {
+      elements.restoreBtn.textContent = 'Restore Original';
+    }
+  } else {
+    elements.restoreBtn.textContent = 'Restore Original';
   }
 }
 

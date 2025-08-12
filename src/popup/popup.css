@@ -230,7 +230,6 @@ body {
 .quick-settings {
   margin-bottom: 16px;
   padding-top: 12px;
-  border-top: 1px solid #e0e0e0;
 }
 
 .checkbox-option {
@@ -319,6 +318,8 @@ body {
   color: #666;
   font-weight: 500;
 }
+
+
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {

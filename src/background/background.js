@@ -198,30 +198,34 @@ async function handleRestoreOriginal(tab) {
  */
 async function handleModeSwitch(mode, tab) {
   try {
-    // Update stored preference
+    if (!['replace', 'paragraph-bilingual'].includes(mode)) {
+      throw new Error(`Invalid translation mode: ${mode}`);
+    }
+
+    console.log(`Background: Switching to mode ${mode} for tab ${tab.id}`);
+
     await chrome.storage.sync.set({ translationMode: mode });
-    
-    // Update context menu state
+
     chrome.contextMenus.update('mode-replace', { checked: mode === 'replace' });
     chrome.contextMenus.update('mode-bilingual', { checked: mode === 'paragraph-bilingual' });
-    
-    // Send mode change to content script
+
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
         action: 'switchMode',
         mode: mode
       });
 
-      if (!response || !response.success) {
-        console.warn('Mode switch message failed:', response?.error);
+      if (response && response.success) {
+        console.log(`Background: Mode switch successful for tab ${tab.id}`);
+      } else {
+        console.warn('Background: Mode switch message failed:', response?.error);
       }
     } catch (error) {
-      console.warn('Failed to send mode switch message:', error);
+      console.warn('Background: Failed to send mode switch message:', error);
     }
-    
 
   } catch (error) {
-    console.error('Mode switch failed:', error);
+    console.error('Background: Mode switch failed:', error);
     throw error;
   }
 }

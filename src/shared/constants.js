@@ -56,14 +56,16 @@ const API_DEFAULTS = {
 
 // Performance constants
 const PERFORMANCE = {
-  BATCH_SIZE: 5,
-  MAX_BATCH_SIZE: 20,
-  MIN_BATCH_SIZE: 1,
-  BATCH_DELAY: 1000,
-  RETRY_ATTEMPTS: 2,
-  MAX_RETRY_ATTEMPTS: 5,
-  DEBOUNCE_DELAY: 300,
-  DOM_MUTATION_DELAY: 500
+  BATCH_SIZE: 8,                    // Increased default batch size for faster translation
+  BATCH_DELAY: 200,                 // Reduced delay for better responsiveness
+  RETRY_ATTEMPTS: 2,                // Number of retry attempts
+  MAX_RETRY_ATTEMPTS: 5,            // Maximum retry attempts
+  DEBOUNCE_DELAY: 200,              // Debounce delay
+  DOM_MUTATION_DELAY: 300,          // DOM mutation delay
+  CACHE_SIZE: 100,                  // Maximum cache entries
+  CACHE_TIMEOUT: 30000,             // Cache timeout in milliseconds (30 seconds)
+  DOCUMENT_ORDER_CACHE_SIZE: 100,   // Document order cache size
+  CONTENT_ANALYSIS_TIMEOUT: 5000    // Content analysis timeout
 };
 
 // Text processing constants
@@ -250,7 +252,10 @@ const VALIDATION_LIMITS = {
   MAX_TOKENS: { min: 1, max: 4000 },
   TIMEOUT: { min: 5000, max: 120000 },
   BATCH_SIZE: { min: 1, max: 20 },
-  RETRY_ATTEMPTS: { min: 0, max: 5 }
+  RETRY_ATTEMPTS: { min: 0, max: 5 },
+  SHORT_TEXT_THRESHOLD: { min: 10, max: 200 },
+  MAX_MERGED_LENGTH: { min: 100, max: 5000 },
+  MAX_MERGED_COUNT: { min: 2, max: 20 }
 };
 
 // Export for different environments

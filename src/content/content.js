@@ -46,13 +46,35 @@ async function initialize() {
  */
 async function loadUserPreferences() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['translationMode', 'targetLanguage', 'batchSize'], (result) => {
+    chrome.storage.sync.get([
+      'translationMode',
+      'targetLanguage',
+      'batchSize',
+      'enableMerge',
+      'shortTextThreshold',
+      'maxMergedLength',
+      'maxMergedCount'
+    ], (result) => {
       translationMode = result.translationMode || 'paragraph-bilingual';
       translationRenderer.setMode(translationMode);
 
-      // Update translation service with batch size if available
-      if (result.batchSize && translationService) {
-        translationService.config.batchSize = result.batchSize;
+      // Update translation service with configuration if available
+      if (translationService) {
+        if (result.batchSize) {
+          translationService.config.batchSize = result.batchSize;
+        }
+        if (result.enableMerge !== undefined) {
+          translationService.config.enableMerge = result.enableMerge;
+        }
+        if (result.shortTextThreshold) {
+          translationService.config.shortTextThreshold = result.shortTextThreshold;
+        }
+        if (result.maxMergedLength) {
+          translationService.config.maxMergedLength = result.maxMergedLength;
+        }
+        if (result.maxMergedCount) {
+          translationService.config.maxMergedCount = result.maxMergedCount;
+        }
       }
 
       resolve();
@@ -85,7 +107,12 @@ async function handleMessage(message, sender, sendResponse) {
         await handleRestoreRequest();
         sendResponse({ success: true, translated: isTranslated });
         break;
-        
+
+      case 'toggleBilingualView':
+        const result = await handleToggleBilingualView();
+        sendResponse({ success: true, showingOriginalOnly: result.showingOriginalOnly });
+        break;
+
       case 'switchMode':
         await handleSwitchModeRequest(message.mode);
         sendResponse({ success: true, mode: translationMode });
@@ -271,13 +298,48 @@ async function handleTranslateRequest(options = {}) {
  */
 async function handleRestoreRequest() {
   try {
-    translationRenderer.restoreOriginalText();
-    isTranslated = false;
-    currentTranslations = [];
-    
+    if (translationMode === 'paragraph-bilingual') {
+      // 在双语模式下，restore 应该只显示原文，不清除翻译状态
+      translationRenderer.showOriginalOnly();
+    } else {
+      // 在替换模式下，restore 完全恢复原文并清除翻译状态
+      translationRenderer.restoreOriginalText();
+      isTranslated = false;
+      currentTranslations = [];
+    }
+
     notifyStatusChange('restored');
   } catch (error) {
     console.error('Restore failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle toggle bilingual view request (show original only vs show both)
+ */
+async function handleToggleBilingualView() {
+  try {
+    if (translationMode !== 'paragraph-bilingual') {
+      throw new Error('Toggle view only available in bilingual mode');
+    }
+
+    // Check if currently showing original only
+    const isShowingOriginalOnly = document.querySelector('.ot-paragraph-bilingual.ot-original-only') !== null;
+
+    if (isShowingOriginalOnly) {
+      // Currently showing original only, switch to show both
+      translationRenderer.showBilingual();
+      notifyStatusChange('bilingual-view');
+      return { showingOriginalOnly: false };
+    } else {
+      // Currently showing both, switch to show original only
+      translationRenderer.showOriginalOnly();
+      notifyStatusChange('original-only-view');
+      return { showingOriginalOnly: true };
+    }
+  } catch (error) {
+    console.error('Toggle bilingual view failed:', error);
     throw error;
   }
 }
@@ -287,27 +349,46 @@ async function handleRestoreRequest() {
  */
 async function handleSwitchModeRequest(newMode) {
   if (!['replace', 'paragraph-bilingual'].includes(newMode)) {
-    throw new Error('Invalid translation mode');
+    throw new Error(`Invalid translation mode: ${newMode}`);
   }
-  
+
   try {
+    const oldMode = translationMode;
+
+    // 如果模式相同，无需切换
+    if (oldMode === newMode) {
+      console.log(`Already in ${newMode} mode, no switch needed`);
+      return;
+    }
+
+    console.log(`Switching translation mode from ${oldMode} to ${newMode}`);
+
+    // 更新全局状态
     translationMode = newMode;
     translationRenderer.setMode(newMode);
-    
-    // Save preference
+
+    // 保存用户偏好
     await chrome.storage.sync.set({ translationMode: newMode });
-    
-    // Re-render if already translated
+
+    // 如果页面已翻译，需要重新渲染
     if (isTranslated && currentTranslations.length > 0) {
-      if (newMode === 'paragraph-bilingual') {
-        // 段落级双语模式需要重新翻译以获取正确的段落组信息
+      if (newMode === 'paragraph-bilingual' && oldMode === 'replace') {
+        // 从替换模式切换到双语模式需要重新翻译以获取正确的段落组信息
+        console.log('Re-translating for bilingual mode');
         await handleTranslateRequest({ forceRefresh: true });
+      } else if (newMode === 'replace' && oldMode === 'paragraph-bilingual') {
+        // 从双语模式切换到替换模式，使用现有翻译数据
+        console.log('Switching to replace mode with existing translations');
+        await translationRenderer.switchMode(newMode, currentTextNodes, currentTranslations);
       } else {
+        // 理论上不应该到达这里，但保留作为安全措施
+        console.log('Unexpected mode switch scenario, using switchMode');
         await translationRenderer.switchMode(newMode, currentTextNodes, currentTranslations);
       }
     }
-    
+
     notifyStatusChange('modeChanged', newMode);
+    console.log(`Mode switch completed: ${newMode}`);
   } catch (error) {
     console.error('Mode switch failed:', error);
     throw error;

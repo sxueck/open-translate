@@ -28,11 +28,30 @@ class TranslationService {
    */
   async getStoredConfig() {
     return new Promise((resolve) => {
-      chrome.storage.sync.get(['translationConfig', 'batchSize'], (result) => {
+      chrome.storage.sync.get([
+        'translationConfig',
+        'batchSize',
+        'enableMerge',
+        'shortTextThreshold',
+        'maxMergedLength',
+        'maxMergedCount'
+      ], (result) => {
         const config = result.translationConfig || {};
-        // Add batchSize to config if available
+        // Add batch and merge settings to config if available
         if (result.batchSize) {
           config.batchSize = result.batchSize;
+        }
+        if (result.enableMerge !== undefined) {
+          config.enableMerge = result.enableMerge;
+        }
+        if (result.shortTextThreshold) {
+          config.shortTextThreshold = result.shortTextThreshold;
+        }
+        if (result.maxMergedLength) {
+          config.maxMergedLength = result.maxMergedLength;
+        }
+        if (result.maxMergedCount) {
+          config.maxMergedCount = result.maxMergedCount;
         }
         resolve(config);
       });
@@ -355,9 +374,9 @@ Translation:`;
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
 
-      // Add delay between batches to respect rate limits
+      // Add minimal delay between batches to respect rate limits
       if (i + batchSize < textSegments.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
 
@@ -365,24 +384,279 @@ Translation:`;
   }
 
   /**
-   * Translate paragraph groups with concurrent processing and real-time progress
+   * Merge and translate short text segments in batches
+   */
+  async batchMergeTranslate(textSegments, targetLanguage = 'zh-CN', sourceLanguage = 'auto') {
+    const mergeConfig = this.getMergeConfig();
+    const { shortTexts, longTexts } = this.categorizeTextsByLength(textSegments, mergeConfig.shortTextThreshold);
+
+    const results = [];
+
+    // Process long texts individually
+    if (longTexts.length > 0) {
+      const longResults = await this.batchTranslate(
+        longTexts.map(item => item.text),
+        targetLanguage,
+        sourceLanguage
+      );
+
+      longTexts.forEach((item, index) => {
+        results.push({
+          ...item,
+          translation: longResults[index],
+          isMerged: false
+        });
+      });
+    }
+
+    // Process short texts with merging
+    if (shortTexts.length > 0) {
+      const mergedResults = await this.processMergedShortTexts(shortTexts, targetLanguage, sourceLanguage, mergeConfig);
+      results.push(...mergedResults);
+    }
+
+    // Sort results back to original order
+    return results.sort((a, b) => a.originalIndex - b.originalIndex);
+  }
+
+  /**
+   * Get merge configuration with defaults
+   */
+  getMergeConfig() {
+    return {
+      shortTextThreshold: this.config.shortTextThreshold || 50,
+      maxMergedLength: this.config.maxMergedLength || 1000,
+      maxMergedCount: this.config.maxMergedCount || 10
+    };
+  }
+
+  /**
+   * Categorize texts by length
+   */
+  categorizeTextsByLength(textSegments, threshold) {
+    const shortTexts = [];
+    const longTexts = [];
+
+    textSegments.forEach((text, index) => {
+      const item = {
+        text: text,
+        originalIndex: index,
+        length: text.length
+      };
+
+      if (text.length <= threshold) {
+        shortTexts.push(item);
+      } else {
+        longTexts.push(item);
+      }
+    });
+
+    return { shortTexts, longTexts };
+  }
+
+  /**
+   * Process short texts with merging strategy
+   */
+  async processMergedShortTexts(shortTexts, targetLanguage, sourceLanguage, mergeConfig) {
+    const mergedBatches = this.createMergedBatches(shortTexts, mergeConfig);
+    const results = [];
+
+    for (const batch of mergedBatches) {
+      try {
+        const mergedTranslation = await this.translateMergedBatch(batch, targetLanguage, sourceLanguage);
+        const splitResults = this.splitMergedTranslation(batch, mergedTranslation);
+        results.push(...splitResults);
+      } catch (error) {
+        // Fallback to individual translation on merge failure
+        console.warn('Merged translation failed, falling back to individual translation:', error);
+        const fallbackResults = await this.fallbackToIndividualTranslation(batch, targetLanguage, sourceLanguage);
+        results.push(...fallbackResults);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Create merged batches from short texts
+   */
+  createMergedBatches(shortTexts, config) {
+    const batches = [];
+    let currentBatch = [];
+    let currentLength = 0;
+
+    for (const item of shortTexts) {
+      const itemLength = item.text.length;
+
+      // Check if adding this item would exceed limits
+      if (currentBatch.length >= config.maxMergedCount ||
+          currentLength + itemLength > config.maxMergedLength) {
+
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+          currentBatch = [];
+          currentLength = 0;
+        }
+      }
+
+      currentBatch.push(item);
+      currentLength += itemLength;
+    }
+
+    // Add remaining batch
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    return batches;
+  }
+
+  /**
+   * Translate a merged batch of short texts
+   */
+  async translateMergedBatch(batch, targetLanguage, sourceLanguage) {
+    const mergedPrompt = this.buildMergedTranslationPrompt(batch, targetLanguage, sourceLanguage);
+    const response = await this.makeAPIRequest(mergedPrompt);
+    return this.extractTranslation(response);
+  }
+
+  /**
+   * Build prompt for merged translation
+   */
+  buildMergedTranslationPrompt(batch, targetLang, sourceLang) {
+    const baseInstructions = [
+      `You are a professional translator. Translate the following numbered text segments from ${sourceLang} to ${targetLang}.`,
+      '',
+      'Requirements:',
+      '1. Maintain the original meaning, tone, and context accurately for each segment',
+      '2. Use natural, fluent language that sounds native to the target language',
+      '3. Preserve technical terms, proper nouns, and brand names when appropriate',
+      '4. Return translations in the same numbered format as the input',
+      '5. Each translation should be on a separate line with its corresponding number',
+      '6. Only return the numbered translations without any additional text or commentary'
+    ];
+
+    const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
+    const fullInstructions = [...baseInstructions, ...specificInstructions];
+
+    // Create numbered text segments
+    const numberedTexts = batch.map((item, index) => `${index + 1}. ${item.text}`).join('\n');
+
+    return `${fullInstructions.join('\n')}
+
+Text segments to translate:
+${numberedTexts}
+
+Translations:`;
+  }
+
+  /**
+   * Split merged translation results back to individual items
+   */
+  splitMergedTranslation(batch, mergedTranslation) {
+    const lines = mergedTranslation.split('\n').filter(line => line.trim());
+    const results = [];
+
+    batch.forEach((item, index) => {
+      const expectedNumber = index + 1;
+      let translation = '';
+
+      // Find the corresponding translation line
+      const translationLine = lines.find(line => {
+        const match = line.match(/^(\d+)\.\s*(.+)$/);
+        return match && parseInt(match[1]) === expectedNumber;
+      });
+
+      if (translationLine) {
+        const match = translationLine.match(/^(\d+)\.\s*(.+)$/);
+        translation = match ? match[2].trim() : item.text;
+      } else {
+        // Fallback: try to get translation by index
+        const fallbackLine = lines[index];
+        if (fallbackLine) {
+          translation = fallbackLine.replace(/^\d+\.\s*/, '').trim();
+        } else {
+          translation = item.text; // Ultimate fallback
+        }
+      }
+
+      results.push({
+        ...item,
+        translation: translation,
+        isMerged: true
+      });
+    });
+
+    return results;
+  }
+
+  /**
+   * Fallback to individual translation when merge fails
+   */
+  async fallbackToIndividualTranslation(batch, targetLanguage, sourceLanguage) {
+    const results = [];
+
+    for (const item of batch) {
+      try {
+        const translation = await this.translateText(item.text, targetLanguage, sourceLanguage);
+        results.push({
+          ...item,
+          translation: translation,
+          isMerged: false
+        });
+      } catch (error) {
+        results.push({
+          ...item,
+          translation: item.text,
+          error: error.message,
+          isMerged: false
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Translate paragraph groups with concurrent processing and merge optimization
    */
   async translateParagraphGroups(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null) {
-    const results = [];
-    const concurrency = this.config.batchSize || 3;
+    const enableMerge = this.config.enableMerge !== false; // Default to true
+
+    if (enableMerge) {
+      return await this.translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback);
+    } else {
+      return await this.translateParagraphGroupsIndividually(paragraphGroups, targetLanguage, sourceLanguage, progressCallback);
+    }
+  }
+
+  /**
+   * Translate paragraph groups individually (original method)
+   */
+  async translateParagraphGroupsIndividually(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null) {
     const totalGroups = paragraphGroups.length;
 
-    // Process paragraph groups in batches with real-time rendering
-    for (let i = 0; i < paragraphGroups.length; i += concurrency) {
-      const batch = paragraphGroups.slice(i, i + concurrency);
+    // Use user configured concurrency directly without any adjustments
+    const concurrency = this.config.batchSize || 5;
 
-      const batchPromises = batch.map(async (group, batchIndex) => {
+    // Use a semaphore-like approach for concurrency control
+    const semaphore = new ConcurrencySemaphore(concurrency);
+    const translationPromises = [];
+
+    for (let i = 0; i < paragraphGroups.length; i++) {
+      const group = paragraphGroups[i];
+
+      const translationPromise = semaphore.acquire().then(async (release) => {
         try {
+          const startTime = Date.now();
+
           const translation = await this.translateText(
             group.combinedText,
             targetLanguage,
             sourceLanguage
           );
+
+          const processingTime = Date.now() - startTime;
 
           const result = {
             id: group.id,
@@ -391,13 +665,15 @@ Translation:`;
             originalText: group.combinedText,
             translation: translation,
             success: true,
-            batchIndex: i + batchIndex,
-            totalGroups: totalGroups
+            batchIndex: group.batchIndex !== undefined ? group.batchIndex : i,
+            totalGroups: totalGroups,
+            processingTime: processingTime
           };
 
+          // Real-time progress callback
           if (progressCallback && typeof progressCallback === 'function') {
             try {
-              await progressCallback(result, i + batchIndex + 1, totalGroups);
+              await progressCallback(result, i + 1, totalGroups);
             } catch (callbackError) {
               console.warn('Progress callback error:', callbackError);
             }
@@ -413,28 +689,293 @@ Translation:`;
             originalText: group.combinedText,
             error: error.message,
             success: false,
-            batchIndex: i + batchIndex,
+            batchIndex: group.batchIndex !== undefined ? group.batchIndex : i,
             totalGroups: totalGroups
           };
 
           if (progressCallback && typeof progressCallback === 'function') {
             try {
-              await progressCallback(result, i + batchIndex + 1, totalGroups);
+              await progressCallback(result, i + 1, totalGroups);
             } catch (callbackError) {
               console.warn('Progress callback error:', callbackError);
             }
           }
 
           return result;
+        } finally {
+          release();
         }
       });
 
-      const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults);
+      translationPromises.push(translationPromise);
+    }
 
-      if (i + concurrency < paragraphGroups.length) {
-        const delay = this.calculateBatchDelay(concurrency);
-        await new Promise(resolve => setTimeout(resolve, delay));
+    // Wait for all translations to complete
+    const allResults = await Promise.all(translationPromises);
+
+    // Sort results back to original order for consistency
+    allResults.sort((a, b) => a.batchIndex - b.batchIndex);
+
+    return allResults;
+  }
+
+  /**
+   * Translate paragraph groups with merge optimization
+   */
+  async translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback) {
+    const mergeConfig = this.getMergeConfig();
+    const { shortGroups, longGroups } = this.categorizeGroupsByLength(paragraphGroups, mergeConfig.shortTextThreshold);
+
+    const results = [];
+    let processedCount = 0;
+    const totalGroups = paragraphGroups.length;
+
+    // Process long groups individually with concurrency
+    if (longGroups.length > 0) {
+      const longResults = await this.translateParagraphGroupsIndividually(longGroups, targetLanguage, sourceLanguage, (result) => {
+        processedCount++;
+        if (progressCallback) {
+          progressCallback(result, processedCount, totalGroups);
+        }
+      });
+      results.push(...longResults);
+    }
+
+    // Process short groups with merging
+    if (shortGroups.length > 0) {
+      const mergedResults = await this.processMergedParagraphGroups(shortGroups, targetLanguage, sourceLanguage, (result) => {
+        processedCount++;
+        if (progressCallback) {
+          progressCallback(result, processedCount, totalGroups);
+        }
+      });
+      results.push(...mergedResults);
+    }
+
+    // Sort results back to original order
+    return results.sort((a, b) => a.batchIndex - b.batchIndex);
+  }
+
+  /**
+   * Categorize paragraph groups by text length
+   */
+  categorizeGroupsByLength(paragraphGroups, threshold) {
+    const shortGroups = [];
+    const longGroups = [];
+
+    paragraphGroups.forEach((group, index) => {
+      const groupWithIndex = { ...group, batchIndex: index };
+
+      if (group.combinedText.length <= threshold) {
+        shortGroups.push(groupWithIndex);
+      } else {
+        longGroups.push(groupWithIndex);
+      }
+    });
+
+    return { shortGroups, longGroups };
+  }
+
+  /**
+   * Process short paragraph groups with merging
+   */
+  async processMergedParagraphGroups(shortGroups, targetLanguage, sourceLanguage, progressCallback) {
+    const mergeConfig = this.getMergeConfig();
+    const mergedBatches = this.createMergedGroupBatches(shortGroups, mergeConfig);
+    const results = [];
+
+    for (const batch of mergedBatches) {
+      try {
+        const mergedTranslation = await this.translateMergedGroupBatch(batch, targetLanguage, sourceLanguage);
+        const splitResults = this.splitMergedGroupTranslation(batch, mergedTranslation);
+
+        // Call progress callback for each result
+        for (const result of splitResults) {
+          results.push(result);
+          if (progressCallback) {
+            progressCallback(result, results.length, shortGroups.length);
+          }
+        }
+      } catch (error) {
+        console.warn('Merged group translation failed, falling back to individual translation:', error);
+        const fallbackResults = await this.fallbackToIndividualGroupTranslation(batch, targetLanguage, sourceLanguage, progressCallback);
+        results.push(...fallbackResults);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Create merged batches from short paragraph groups
+   */
+  createMergedGroupBatches(shortGroups, config) {
+    const batches = [];
+    let currentBatch = [];
+    let currentLength = 0;
+
+    for (const group of shortGroups) {
+      const groupLength = group.combinedText.length;
+
+      // Check if adding this group would exceed limits
+      if (currentBatch.length >= config.maxMergedCount ||
+          currentLength + groupLength > config.maxMergedLength) {
+
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+          currentBatch = [];
+          currentLength = 0;
+        }
+      }
+
+      currentBatch.push(group);
+      currentLength += groupLength;
+    }
+
+    // Add remaining batch
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    return batches;
+  }
+
+  /**
+   * Translate a merged batch of paragraph groups
+   */
+  async translateMergedGroupBatch(batch, targetLanguage, sourceLanguage) {
+    const mergedPrompt = this.buildMergedGroupTranslationPrompt(batch, targetLanguage, sourceLanguage);
+    const response = await this.makeAPIRequest(mergedPrompt);
+    return this.extractTranslation(response);
+  }
+
+  /**
+   * Build prompt for merged group translation
+   */
+  buildMergedGroupTranslationPrompt(batch, targetLang, sourceLang) {
+    const baseInstructions = [
+      `You are a professional translator. Translate the following numbered text segments from ${sourceLang} to ${targetLang}.`,
+      '',
+      'Requirements:',
+      '1. Maintain the original meaning, tone, and context accurately for each segment',
+      '2. Use natural, fluent language that sounds native to the target language',
+      '3. Preserve technical terms, proper nouns, and brand names when appropriate',
+      '4. Return translations in the same numbered format as the input',
+      '5. Each translation should be on a separate line with its corresponding number',
+      '6. Only return the numbered translations without any additional text or commentary'
+    ];
+
+    const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
+    const fullInstructions = [...baseInstructions, ...specificInstructions];
+
+    // Create numbered text segments from paragraph groups
+    const numberedTexts = batch.map((group, index) => `${index + 1}. ${group.combinedText}`).join('\n');
+
+    return `${fullInstructions.join('\n')}
+
+Text segments to translate:
+${numberedTexts}
+
+Translations:`;
+  }
+
+  /**
+   * Split merged group translation results back to individual groups
+   */
+  splitMergedGroupTranslation(batch, mergedTranslation) {
+    const lines = mergedTranslation.split('\n').filter(line => line.trim());
+    const results = [];
+
+    batch.forEach((group, index) => {
+      const expectedNumber = index + 1;
+      let translation = '';
+
+      // Find the corresponding translation line
+      const translationLine = lines.find(line => {
+        const match = line.match(/^(\d+)\.\s*(.+)$/);
+        return match && parseInt(match[1]) === expectedNumber;
+      });
+
+      if (translationLine) {
+        const match = translationLine.match(/^(\d+)\.\s*(.+)$/);
+        translation = match ? match[2].trim() : group.combinedText;
+      } else {
+        // Fallback: try to get translation by index
+        const fallbackLine = lines[index];
+        if (fallbackLine) {
+          translation = fallbackLine.replace(/^\d+\.\s*/, '').trim();
+        } else {
+          translation = group.combinedText; // Ultimate fallback
+        }
+      }
+
+      const result = {
+        id: group.id,
+        container: group.container,
+        textNodes: group.textNodes,
+        originalText: group.combinedText,
+        translation: translation,
+        success: true,
+        batchIndex: group.batchIndex,
+        totalGroups: batch.length,
+        processingTime: 0,
+        isMerged: true
+      };
+
+      results.push(result);
+    });
+
+    return results;
+  }
+
+  /**
+   * Fallback to individual group translation when merge fails
+   */
+  async fallbackToIndividualGroupTranslation(batch, targetLanguage, sourceLanguage, progressCallback) {
+    const results = [];
+
+    for (const group of batch) {
+      try {
+        const startTime = Date.now();
+        const translation = await this.translateText(group.combinedText, targetLanguage, sourceLanguage);
+        const processingTime = Date.now() - startTime;
+
+        const result = {
+          id: group.id,
+          container: group.container,
+          textNodes: group.textNodes,
+          originalText: group.combinedText,
+          translation: translation,
+          success: true,
+          batchIndex: group.batchIndex,
+          totalGroups: batch.length,
+          processingTime: processingTime,
+          isMerged: false
+        };
+
+        results.push(result);
+
+        if (progressCallback) {
+          progressCallback(result);
+        }
+      } catch (error) {
+        const result = {
+          id: group.id,
+          container: group.container,
+          textNodes: group.textNodes,
+          originalText: group.combinedText,
+          error: error.message,
+          success: false,
+          batchIndex: group.batchIndex,
+          totalGroups: batch.length,
+          isMerged: false
+        };
+
+        results.push(result);
+
+        if (progressCallback) {
+          progressCallback(result);
+        }
       }
     }
 
@@ -445,9 +986,50 @@ Translation:`;
    * Calculate optimal delay between batches based on performance
    */
   calculateBatchDelay(batchSize) {
-    const baseDelay = 500;
-    const sizeMultiplier = Math.min(batchSize / 3, 2);
+    const baseDelay = 200;
+    const sizeMultiplier = Math.min(batchSize / 5, 1.5);
     return Math.floor(baseDelay * sizeMultiplier);
+  }
+}
+
+/**
+ * Concurrency control semaphore for managing parallel translations
+ */
+class ConcurrencySemaphore {
+  constructor(maxConcurrency) {
+    this.maxConcurrency = maxConcurrency;
+    this.currentCount = 0;
+    this.waitingQueue = [];
+  }
+
+  async acquire() {
+    return new Promise((resolve) => {
+      if (this.currentCount < this.maxConcurrency) {
+        this.currentCount++;
+        resolve(() => this.release());
+      } else {
+        this.waitingQueue.push(() => {
+          this.currentCount++;
+          resolve(() => this.release());
+        });
+      }
+    });
+  }
+
+  release() {
+    this.currentCount--;
+    if (this.waitingQueue.length > 0) {
+      const next = this.waitingQueue.shift();
+      next();
+    }
+  }
+
+  getStats() {
+    return {
+      maxConcurrency: this.maxConcurrency,
+      currentCount: this.currentCount,
+      waitingCount: this.waitingQueue.length
+    };
   }
 }
 

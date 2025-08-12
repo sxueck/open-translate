@@ -7,10 +7,16 @@ class TextExtractor {
     this.excludeSelectors = options.excludeSelectors || DOM_SELECTORS.EXCLUDE_DEFAULT;
     this.blockElements = DOM_SELECTORS.BLOCK_ELEMENTS;
 
-    // Performance optimization: cache DOM queries
+    // Enhanced caching system
     this.nodeCache = new Map();
+    this.contentHashCache = new Map(); // Cache based on content hash
     this.lastCacheTime = 0;
-    this.cacheTimeout = 5000; // 5 seconds
+    this.cacheTimeout = 30000; // Increased to 30 seconds for better hit rate
+    this.maxCacheSize = 100; // Increased cache size
+    this.cacheStats = { hits: 0, misses: 0 }; // Cache performance tracking
+
+    // DOM mutation observer for cache invalidation
+    this.setupMutationObserver();
 
     // Extraction modes
     this.extractionModes = {
@@ -24,11 +30,20 @@ class TextExtractor {
    * Unified extraction method with different modes
    */
   extract(mode = this.extractionModes.SIMPLE, rootElement = document.body, options = {}) {
+    // Generate content-based cache key for better hit rate
+    const contentHash = this.generateContentHash(rootElement, mode, options);
+    const cacheKey = `${mode}-${contentHash}`;
+
     // Check cache first for performance
-    const cacheKey = `${mode}-${rootElement.tagName}-${Date.now()}`;
-    if (this.shouldUseCache() && this.nodeCache.has(cacheKey)) {
-      return this.nodeCache.get(cacheKey);
+    if (this.shouldUseCache()) {
+      const cachedResult = this.getCachedResult(cacheKey);
+      if (cachedResult) {
+        this.cacheStats.hits++;
+        return cachedResult;
+      }
     }
+
+    this.cacheStats.misses++;
 
     let result;
     switch (mode) {
@@ -45,6 +60,41 @@ class TextExtractor {
     // Cache result for performance
     this.cacheResult(cacheKey, result);
     return result;
+  }
+
+  /**
+   * Generate content-based hash for cache key
+   */
+  generateContentHash(rootElement, mode, options) {
+    // Create a lightweight hash based on element structure and content
+    const elementInfo = {
+      tag: rootElement.tagName,
+      id: rootElement.id,
+      className: rootElement.className,
+      childCount: rootElement.children.length,
+      textLength: rootElement.textContent.length,
+      mode: mode,
+      excludeSelectors: JSON.stringify(options.excludeSelectors || [])
+    };
+
+    // Simple hash function for cache key
+    return this.simpleHash(JSON.stringify(elementInfo));
+  }
+
+  /**
+   * Simple hash function for generating cache keys
+   */
+  simpleHash(str) {
+    let hash = 0;
+    if (str.length === 0) return hash;
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+
+    return Math.abs(hash).toString(36);
   }
 
   /**
@@ -111,14 +161,19 @@ class TextExtractor {
         return;
       }
 
-      const textLength = container.textContent.trim().length;
-      const childElements = container.children.length;
+      // 预计算所有需要的元素信息，避免重复查询
+      const elementInfo = this.analyzeElementContent(container);
 
       // 计算内容密度分数
-      const score = this.calculateContentScore(container, textLength, childElements);
+      const score = this.calculateContentScoreOptimized(elementInfo);
 
       if (score > 0) {
-        candidates.push({ element: container, score, textLength });
+        candidates.push({
+          element: container,
+          score,
+          textLength: elementInfo.textLength,
+          info: elementInfo
+        });
       }
     });
 
@@ -131,6 +186,80 @@ class TextExtractor {
     }
 
     return null;
+  }
+
+  /**
+   * 分析元素内容，一次性获取所有需要的信息
+   */
+  analyzeElementContent(element) {
+    const textContent = element.textContent.trim();
+    const textLength = textContent.length;
+
+    // 使用单次查询获取所有子元素信息
+    const allChildren = Array.from(element.children);
+    const childElements = allChildren.length;
+
+    // 分类统计不同类型的元素
+    const elementCounts = {
+      paragraphs: 0,
+      headings: 0,
+      links: 0,
+      buttons: 0,
+      images: 0,
+      lists: 0
+    };
+
+    // 使用 TreeWalker 高效遍历所有后代元素
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_ELEMENT,
+      null,
+      false
+    );
+
+    let node;
+    while (node = walker.nextNode()) {
+      const tagName = node.tagName.toLowerCase();
+
+      switch (tagName) {
+        case 'p':
+          elementCounts.paragraphs++;
+          break;
+        case 'h1':
+        case 'h2':
+        case 'h3':
+        case 'h4':
+        case 'h5':
+        case 'h6':
+          elementCounts.headings++;
+          break;
+        case 'a':
+          elementCounts.links++;
+          break;
+        case 'button':
+          elementCounts.buttons++;
+          break;
+        case 'input':
+          if (node.type === 'button' || node.type === 'submit') {
+            elementCounts.buttons++;
+          }
+          break;
+        case 'img':
+          elementCounts.images++;
+          break;
+        case 'ul':
+        case 'ol':
+          elementCounts.lists++;
+          break;
+      }
+    }
+
+    return {
+      textLength,
+      childElements,
+      textContent,
+      ...elementCounts
+    };
   }
 
   /**
@@ -151,28 +280,53 @@ class TextExtractor {
   }
 
   /**
-   * 计算内容区域分数
+   * 优化后的内容分数计算方法
    */
-  calculateContentScore(element, textLength, childElements) {
+  calculateContentScoreOptimized(elementInfo) {
     let score = 0;
+    const { textLength, paragraphs, headings, links, buttons, images, lists } = elementInfo;
 
-    // 文本长度权重
-    if (textLength > 500) score += 3;
+    // 文本长度权重 - 使用更精细的分级
+    if (textLength > 1000) score += 5;
+    else if (textLength > 500) score += 3;
     else if (textLength > 200) score += 2;
     else if (textLength > 50) score += 1;
 
-    // 段落数量权重
-    const paragraphs = element.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
-    if (paragraphs.length > 5) score += 2;
-    else if (paragraphs.length > 2) score += 1;
+    // 段落和标题权重
+    const totalParagraphs = paragraphs + headings;
+    if (totalParagraphs > 10) score += 3;
+    else if (totalParagraphs > 5) score += 2;
+    else if (totalParagraphs > 2) score += 1;
 
-    // 减分项：包含太多链接或按钮
-    const links = element.querySelectorAll('a');
-    const buttons = element.querySelectorAll('button, input[type="button"]');
-    if (links.length > textLength / 100) score -= 1;
-    if (buttons.length > 5) score -= 1;
+    // 标题额外加分
+    if (headings > 0) score += Math.min(headings, 3);
 
-    return score;
+    // 列表内容加分
+    if (lists > 0) score += Math.min(lists * 0.5, 2);
+
+    // 图片适量加分
+    if (images > 0 && images <= 5) score += 1;
+
+    // 减分项：链接密度过高
+    const linkDensity = textLength > 0 ? links / (textLength / 100) : 0;
+    if (linkDensity > 1) score -= Math.min(linkDensity, 3);
+
+    // 减分项：按钮过多
+    if (buttons > 5) score -= Math.min(buttons - 5, 2);
+
+    // 减分项：图片过多可能是广告区域
+    if (images > 10) score -= 2;
+
+    return Math.max(score, 0); // 确保分数不为负
+  }
+
+  /**
+   * 计算内容区域分数（保持向后兼容）
+   */
+  calculateContentScore(element, textLength, childElements) {
+    // 使用优化后的方法
+    const elementInfo = this.analyzeElementContent(element);
+    return this.calculateContentScoreOptimized(elementInfo);
   }
 
   /**
@@ -326,26 +480,124 @@ class TextExtractor {
   }
 
   /**
-   * Cache management methods
+   * Setup DOM mutation observer for intelligent cache invalidation
+   */
+  setupMutationObserver() {
+    if (typeof MutationObserver !== 'undefined') {
+      this.mutationObserver = new MutationObserver((mutations) => {
+        let shouldInvalidateCache = false;
+
+        for (const mutation of mutations) {
+          // Invalidate cache on significant DOM changes
+          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+            shouldInvalidateCache = true;
+            break;
+          }
+          if (mutation.type === 'attributes' &&
+              ['class', 'id', 'style'].includes(mutation.attributeName)) {
+            shouldInvalidateCache = true;
+            break;
+          }
+        }
+
+        if (shouldInvalidateCache) {
+          this.invalidateCache();
+        }
+      });
+
+      // Start observing
+      this.mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'id', 'style']
+      });
+    }
+  }
+
+  /**
+   * Enhanced cache management methods
    */
   shouldUseCache() {
     return Date.now() - this.lastCacheTime < this.cacheTimeout;
   }
 
   cacheResult(key, result) {
-    this.nodeCache.set(key, result);
+    // Add timestamp for LRU eviction
+    const cacheEntry = {
+      data: result,
+      timestamp: Date.now(),
+      accessCount: 1
+    };
+
+    this.nodeCache.set(key, cacheEntry);
     this.lastCacheTime = Date.now();
 
-    // Limit cache size for memory management
-    if (this.nodeCache.size > 10) {
-      const firstKey = this.nodeCache.keys().next().value;
-      this.nodeCache.delete(firstKey);
+    // Intelligent cache size management
+    if (this.nodeCache.size > this.maxCacheSize) {
+      this.evictLeastRecentlyUsed();
     }
   }
 
-  clearCache() {
+  /**
+   * Get cached result with access tracking
+   */
+  getCachedResult(key) {
+    const entry = this.nodeCache.get(key);
+    if (entry) {
+      entry.accessCount++;
+      entry.timestamp = Date.now();
+      return entry.data;
+    }
+    return null;
+  }
+
+  /**
+   * Evict least recently used cache entries
+   */
+  evictLeastRecentlyUsed() {
+    const entries = Array.from(this.nodeCache.entries());
+
+    // Sort by timestamp (oldest first)
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+    // Remove oldest 25% of entries
+    const removeCount = Math.floor(entries.length * 0.25);
+    for (let i = 0; i < removeCount; i++) {
+      this.nodeCache.delete(entries[i][0]);
+    }
+  }
+
+  /**
+   * Invalidate cache when DOM changes significantly
+   */
+  invalidateCache() {
     this.nodeCache.clear();
+    this.contentHashCache.clear();
+    if (this.documentOrderCache) {
+      this.documentOrderCache.clear();
+    }
     this.lastCacheTime = 0;
+  }
+
+  /**
+   * Clear all caches
+   */
+  clearCache() {
+    this.invalidateCache();
+    this.cacheStats = { hits: 0, misses: 0 };
+  }
+
+  /**
+   * Get cache performance statistics
+   */
+  getCacheStats() {
+    const total = this.cacheStats.hits + this.cacheStats.misses;
+    return {
+      ...this.cacheStats,
+      hitRate: total > 0 ? (this.cacheStats.hits / total * 100).toFixed(2) + '%' : '0%',
+      cacheSize: this.nodeCache.size
+    };
   }
 
   /**
@@ -512,9 +764,9 @@ class TextExtractor {
    * Get document order position for element
    */
   getDocumentOrder(element) {
-    // Use compareDocumentPosition for better performance
     if (!this.documentOrderCache) {
       this.documentOrderCache = new Map();
+      this.documentOrderCounter = 0;
     }
 
     const elementKey = this.getElementId(element);
@@ -522,12 +774,108 @@ class TextExtractor {
       return this.documentOrderCache.get(elementKey);
     }
 
-    // Use a more efficient approach with compareDocumentPosition
-    const allElements = Array.from(document.body.querySelectorAll('*'));
-    const position = allElements.indexOf(element);
+    // Use compareDocumentPosition for efficient relative positioning
+    let position = this.documentOrderCounter++;
+
+    // For more accurate positioning, use a reference-based approach
+    if (this.documentOrderCache.size > 0) {
+      // Find the closest cached element for relative positioning
+      let bestReference = null;
+      let bestDistance = Infinity;
+
+      for (const [cachedKey, cachedPosition] of this.documentOrderCache) {
+        const cachedElement = this.getCachedElement(cachedKey);
+        if (cachedElement) {
+          const relationship = element.compareDocumentPosition(cachedElement);
+
+          if (relationship & Node.DOCUMENT_POSITION_PRECEDING) {
+            // Current element comes after cached element
+            const distance = this.estimateDistance(cachedElement, element);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestReference = { element: cachedElement, position: cachedPosition, offset: distance };
+            }
+          } else if (relationship & Node.DOCUMENT_POSITION_FOLLOWING) {
+            // Current element comes before cached element
+            const distance = this.estimateDistance(element, cachedElement);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestReference = { element: cachedElement, position: cachedPosition, offset: -distance };
+            }
+          }
+        }
+      }
+
+      if (bestReference) {
+        position = bestReference.position + bestReference.offset;
+      }
+    }
 
     this.documentOrderCache.set(elementKey, position);
+
+    // Limit cache size for memory management
+    if (this.documentOrderCache.size > 100) {
+      this.cleanupDocumentOrderCache();
+    }
+
     return position;
+  }
+
+  /**
+   * Estimate distance between two elements in document order
+   */
+  estimateDistance(fromElement, toElement) {
+    let distance = 0;
+    let current = fromElement;
+
+    // Simple heuristic: count parent-child relationships and siblings
+    while (current && current !== toElement && distance < 50) {
+      if (current.nextElementSibling) {
+        current = current.nextElementSibling;
+        distance += 1;
+      } else if (current.parentElement) {
+        current = current.parentElement.nextElementSibling;
+        distance += 10; // Higher cost for going up the tree
+      } else {
+        break;
+      }
+    }
+
+    return current === toElement ? distance : 50; // Max distance cap
+  }
+
+  /**
+   * Get cached element by key (simplified lookup)
+   */
+  getCachedElement(elementKey) {
+    // For performance, we'll use a simplified approach
+    // In a real implementation, you might want to maintain element references
+    try {
+      if (elementKey.startsWith('#')) {
+        return document.getElementById(elementKey.substring(1));
+      }
+      // For path-based keys, we'll skip the lookup to avoid performance issues
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Clean up document order cache when it gets too large
+   */
+  cleanupDocumentOrderCache() {
+    // Remove oldest entries (simple FIFO approach)
+    const entries = Array.from(this.documentOrderCache.entries());
+    const keepCount = 50;
+
+    if (entries.length > keepCount) {
+      this.documentOrderCache.clear();
+      // Keep the most recent entries
+      entries.slice(-keepCount).forEach(([key, value]) => {
+        this.documentOrderCache.set(key, value);
+      });
+    }
   }
 
   /**

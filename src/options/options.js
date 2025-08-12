@@ -59,6 +59,12 @@ function initializeElements() {
   elements.excludeSelectors = document.getElementById('excludeSelectors');
   elements.batchSize = document.getElementById('batchSize');
   elements.retryAttempts = document.getElementById('retryAttempts');
+
+  // Batch Merge Settings
+  elements.enableMerge = document.getElementById('enableMerge');
+  elements.shortTextThreshold = document.getElementById('shortTextThreshold');
+  elements.maxMergedLength = document.getElementById('maxMergedLength');
+  elements.maxMergedCount = document.getElementById('maxMergedCount');
   
   // Actions
   elements.saveSettings = document.getElementById('saveSettings');
@@ -101,6 +107,19 @@ async function loadSettings() {
     elements.excludeSelectors.value = config.excludeSelectors;
     elements.batchSize.value = config.batchSize;
     elements.retryAttempts.value = config.retryAttempts;
+
+    if (elements.enableMerge) {
+      elements.enableMerge.checked = config.enableMerge !== false; // Default to true
+    }
+    if (elements.shortTextThreshold) {
+      elements.shortTextThreshold.value = config.shortTextThreshold || 50;
+    }
+    if (elements.maxMergedLength) {
+      elements.maxMergedLength.value = config.maxMergedLength || 1000;
+    }
+    if (elements.maxMergedCount) {
+      elements.maxMergedCount.value = config.maxMergedCount || 10;
+    }
 
     // Update model selection UI
     updateModelSelectionUI();
@@ -399,7 +418,11 @@ async function saveSettings() {
       preserveFormatting: elements.preserveFormatting.checked,
       excludeSelectors: elements.excludeSelectors.value.trim(),
       batchSize: parseInt(elements.batchSize.value),
-      retryAttempts: parseInt(elements.retryAttempts.value)
+      retryAttempts: parseInt(elements.retryAttempts.value),
+      enableMerge: elements.enableMerge ? elements.enableMerge.checked : true,
+      shortTextThreshold: elements.shortTextThreshold ? parseInt(elements.shortTextThreshold.value) : 50,
+      maxMergedLength: elements.maxMergedLength ? parseInt(elements.maxMergedLength.value) : 1000,
+      maxMergedCount: elements.maxMergedCount ? parseInt(elements.maxMergedCount.value) : 10
     };
 
     await configManager.saveConfig(settings);

@@ -38,7 +38,7 @@ A powerful Chrome browser extension for web page translation with OpenAI API com
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/sxueck/open-translate.git
    cd open-translate
    ```
 

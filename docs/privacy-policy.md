@@ -1,8 +1,5 @@
 # Open Translate Privacy Policy
 
-**Effective Date: December 2024**
-**Last Updated: December 2024**
-
 ## Overview
 
 Open Translate (hereinafter referred to as "this extension") is a browser extension focused on webpage translation. We highly value user privacy rights, and this privacy policy details how we collect, use, store, and protect your information.

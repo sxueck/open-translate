@@ -263,9 +263,10 @@ async function handleTranslate() {
       action: 'translate',
       options: {
         sourceLanguage: elements.sourceLanguage.value,
-        targetLanguage: elements.targetLanguage.value
+        targetLanguage: elements.targetLanguage.value,
+        forceRefresh: isTranslated
       }
-    }, 60000); // Longer timeout for translation
+    }, 60000);
 
     if (response && response.success) {
       isTranslated = response.translated;

@@ -124,12 +124,12 @@ class TranslationService {
   /**
    * Translate text using configured API
    */
-  async translateText(text, targetLanguage = 'zh-CN', sourceLanguage = 'auto') {
+  async translateText(text, targetLanguage = 'zh-CN', sourceLanguage = 'auto', options = {}) {
     if (!this.config.apiKey) {
       throw new Error('API key not configured');
     }
 
-    const prompt = this.buildTranslationPrompt(text, targetLanguage, sourceLanguage);
+    const prompt = this.buildTranslationPrompt(text, targetLanguage, sourceLanguage, options);
     
     try {
       const response = await this.makeAPIRequest(prompt);
@@ -156,10 +156,10 @@ class TranslationService {
   /**
    * Build translation prompt for API
    */
-  buildTranslationPrompt(text, targetLanguage, sourceLanguage) {
+  buildTranslationPrompt(text, targetLanguage, sourceLanguage, options = {}) {
     const targetLang = LANGUAGE_MAP[targetLanguage] || targetLanguage;
     const sourceLang = sourceLanguage === 'auto' ? 'the source language' : (LANGUAGE_MAP[sourceLanguage] || sourceLanguage);
-    const prompt = this.buildContextualPrompt(text, targetLang, sourceLang);
+    const prompt = this.buildContextualPrompt(text, targetLang, sourceLang, options);
 
     return prompt;
   }
@@ -167,7 +167,7 @@ class TranslationService {
   /**
    * Build contextual translation prompt with language-specific optimizations
    */
-  buildContextualPrompt(text, targetLang, sourceLang) {
+  buildContextualPrompt(text, targetLang, sourceLang, options = {}) {
     const baseInstructions = [
       `You are a professional translator. Translate the following text from ${sourceLang} to ${targetLang}.`,
       '',
@@ -180,13 +180,16 @@ class TranslationService {
       '6. Only return the translation without any additional text, explanation, or commentary'
     ];
 
-    // Add HTML handling instructions if text contains HTML
-    if (this.containsHtmlTags(text)) {
+    // Add HTML handling instructions only if text contains HTML AND we're not in replace mode
+    const shouldPreserveHtml = this.containsHtmlTags(text) && options.translationMode !== 'replace';
+    if (shouldPreserveHtml) {
       baseInstructions.push('7. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
       baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
       baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in the translation');
       baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
       baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
+    } else if (options.translationMode === 'replace') {
+      baseInstructions.push('7. Return only plain text translation without any HTML tags, markup, or formatting');
     }
 
     // Add language-specific instructions
@@ -632,20 +635,20 @@ Translations:`;
   /**
    * Translate paragraph groups with concurrent processing and merge optimization
    */
-  async translateParagraphGroups(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null) {
+  async translateParagraphGroups(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null, options = {}) {
     const enableMerge = this.config.enableMerge !== false; // Default to true
 
     if (enableMerge) {
-      return await this.translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback);
+      return await this.translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options);
     } else {
-      return await this.translateParagraphGroupsIndividually(paragraphGroups, targetLanguage, sourceLanguage, progressCallback);
+      return await this.translateParagraphGroupsIndividually(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options);
     }
   }
 
   /**
    * Translate paragraph groups individually (original method)
    */
-  async translateParagraphGroupsIndividually(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null) {
+  async translateParagraphGroupsIndividually(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null, options = {}) {
     const totalGroups = paragraphGroups.length;
 
     // Use user configured concurrency directly without any adjustments
@@ -665,7 +668,8 @@ Translations:`;
           const translation = await this.translateText(
             group.combinedText,
             targetLanguage,
-            sourceLanguage
+            sourceLanguage,
+            options
           );
 
           const processingTime = Date.now() - startTime;
@@ -733,7 +737,7 @@ Translations:`;
   /**
    * Translate paragraph groups with merge optimization
    */
-  async translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback) {
+  async translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options = {}) {
     const mergeConfig = this.getMergeConfig();
     const { shortGroups, longGroups } = this.categorizeGroupsByLength(paragraphGroups, mergeConfig.shortTextThreshold);
 
@@ -748,7 +752,7 @@ Translations:`;
         if (progressCallback) {
           progressCallback(result, processedCount, totalGroups);
         }
-      });
+      }, options);
       results.push(...longResults);
     }
 
@@ -759,7 +763,7 @@ Translations:`;
         if (progressCallback) {
           progressCallback(result, processedCount, totalGroups);
         }
-      });
+      }, options);
       results.push(...mergedResults);
     }
 
@@ -790,14 +794,14 @@ Translations:`;
   /**
    * Process short paragraph groups with merging
    */
-  async processMergedParagraphGroups(shortGroups, targetLanguage, sourceLanguage, progressCallback) {
+  async processMergedParagraphGroups(shortGroups, targetLanguage, sourceLanguage, progressCallback, options = {}) {
     const mergeConfig = this.getMergeConfig();
     const mergedBatches = this.createMergedGroupBatches(shortGroups, mergeConfig);
     const results = [];
 
     for (const batch of mergedBatches) {
       try {
-        const mergedTranslation = await this.translateMergedGroupBatch(batch, targetLanguage, sourceLanguage);
+        const mergedTranslation = await this.translateMergedGroupBatch(batch, targetLanguage, sourceLanguage, options);
         const splitResults = this.splitMergedGroupTranslation(batch, mergedTranslation);
 
         // Call progress callback for each result
@@ -853,8 +857,8 @@ Translations:`;
   /**
    * Translate a merged batch of paragraph groups
    */
-  async translateMergedGroupBatch(batch, targetLanguage, sourceLanguage) {
-    const mergedPrompt = this.buildMergedGroupTranslationPrompt(batch, targetLanguage, sourceLanguage);
+  async translateMergedGroupBatch(batch, targetLanguage, sourceLanguage, options = {}) {
+    const mergedPrompt = this.buildMergedGroupTranslationPrompt(batch, targetLanguage, sourceLanguage, options);
     const response = await this.makeAPIRequest(mergedPrompt);
     return this.extractTranslation(response);
   }
@@ -862,7 +866,7 @@ Translations:`;
   /**
    * Build prompt for merged group translation
    */
-  buildMergedGroupTranslationPrompt(batch, targetLang, sourceLang) {
+  buildMergedGroupTranslationPrompt(batch, targetLang, sourceLang, options = {}) {
     const baseInstructions = [
       `You are a professional translator. Translate the following numbered text segments from ${sourceLang} to ${targetLang}.`,
       '',
@@ -875,14 +879,18 @@ Translations:`;
       '6. Only return the numbered translations without any additional text or commentary'
     ];
 
-    // Check if any group contains HTML
+    // Check if any group contains HTML and handle based on translation mode
     const hasHtml = batch.some(group => this.containsHtmlTags(group.combinedText));
-    if (hasHtml) {
+    const shouldPreserveHtml = hasHtml && options.translationMode !== 'replace';
+
+    if (shouldPreserveHtml) {
       baseInstructions.push('7. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
       baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
       baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in each translation');
       baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
       baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
+    } else if (options.translationMode === 'replace') {
+      baseInstructions.push('7. Return only plain text translations without any HTML tags, markup, or formatting');
     }
 
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);

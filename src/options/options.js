@@ -102,7 +102,15 @@ async function loadSettings() {
     elements.preserveFormatting.checked = config.preserveFormatting;
 
     // Advanced Settings
-    elements.excludeSelectors.value = config.excludeSelectors;
+    const defaultSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT.join('\n');
+    const userSelectors = config.excludeSelectors || '';
+
+    let displayContent = `# Default Exclude Selectors (built-in):\n${defaultSelectors}\n\n# User Additional Selectors:`;
+    if (userSelectors) {
+      displayContent += `\n${userSelectors}`;
+    }
+
+    elements.excludeSelectors.value = displayContent;
     elements.batchSize.value = config.batchSize;
     elements.retryAttempts.value = config.retryAttempts;
 
@@ -403,6 +411,39 @@ async function refreshAvailableModels() {
 }
 
 /**
+ * Extract user-defined selectors from the textarea content
+ */
+function extractUserSelectors(textareaValue) {
+  if (!textareaValue) return '';
+
+  const lines = textareaValue.split('\n');
+  const userSelectors = [];
+  let inUserSection = false;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    // 检查是否进入用户自定义区域
+    if (trimmedLine.startsWith('#') && trimmedLine.includes('User Additional Selectors')) {
+      inUserSection = true;
+      continue;
+    }
+
+    // 跳过空行和其他注释行
+    if (!trimmedLine || trimmedLine.startsWith('#')) {
+      continue;
+    }
+
+    // 只有在用户自定义区域的选择器才会被保存
+    if (inUserSection) {
+      userSelectors.push(trimmedLine);
+    }
+  }
+
+  return userSelectors.join('\n').trim();
+}
+
+/**
  * Save settings to storage
  */
 async function saveSettings() {
@@ -414,7 +455,7 @@ async function saveSettings() {
       translationMode: elements.defaultModeReplace.checked ? TRANSLATION_MODES.REPLACE : TRANSLATION_MODES.BILINGUAL,
       autoTranslate: elements.autoTranslateEnabled.checked,
       preserveFormatting: elements.preserveFormatting.checked,
-      excludeSelectors: elements.excludeSelectors.value.trim(),
+      excludeSelectors: extractUserSelectors(elements.excludeSelectors.value),
       batchSize: parseInt(elements.batchSize.value),
       retryAttempts: parseInt(elements.retryAttempts.value),
       enableMerge: elements.enableMerge ? elements.enableMerge.checked : true,

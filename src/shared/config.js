@@ -20,7 +20,7 @@ class ConfigManager {
       sourceLanguage: 'auto',
       autoTranslate: false,
       preserveFormatting: true,
-      excludeSelectors: 'script\nstyle\nnoscript\ncode\npre\nkbd\nsamp\nvar\n.notranslate\n[translate="no"]',
+      excludeSelectors: '',
       batchSize: 8,
       retryAttempts: 2,
       enableMerge: true,

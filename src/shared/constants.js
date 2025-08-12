@@ -98,8 +98,6 @@ const DOM_SELECTORS = {
     '[translate="no"]',
     'nav',
     'aside',
-    'header',
-    'footer',
     '.sidebar',
     '.side-bar',
     '.navigation',
@@ -111,8 +109,6 @@ const DOM_SELECTORS = {
     '.breadcrumbs',
     '.topbar',
     '.top-bar',
-    '.header',
-    '.footer',
     '.aside',
     '.widget',
     '.widgets',
@@ -137,7 +133,14 @@ const DOM_SELECTORS = {
     '.related',
     '.recommended',
     '.comments-nav',
-    '.comment-nav'
+    '.comment-nav',
+    '.tooltip',
+    '.alt-text',
+    '[role="tooltip"]',
+    'input[type="hidden"]',
+    'input[placeholder]',
+    '[title]:empty',
+    '[alt]:empty'
   ],
   BLOCK_ELEMENTS: [
     'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',

@@ -34,6 +34,9 @@ class TranslationRenderer {
    * Render translations in replace mode
    */
   renderReplaceMode(textNodes, translations) {
+    // 确保在Replace模式下清理任何双语模式残留
+    this.cleanupAllBilingualElements();
+
     textNodes.forEach((textNode, index) => {
       if (translations[index] && !translations[index].error) {
         this.replaceTextContent(textNode, translations[index]);
@@ -95,7 +98,9 @@ class TranslationRenderer {
     // Skip if already processed or if node is in a bilingual container
     if (this.translatedElements.has(parent) ||
         parent.classList.contains('ot-bilingual-container') ||
-        parent.querySelector('.ot-bilingual-container')) {
+        parent.classList.contains('ot-paragraph-bilingual') ||
+        parent.querySelector('.ot-bilingual-container') ||
+        parent.querySelector('.ot-paragraph-bilingual')) {
       return;
     }
 
@@ -113,6 +118,9 @@ class TranslationRenderer {
       return;
     }
 
+    // 确保清理任何残留的双语模式样式
+    this.cleanupBilingualElements(parent);
+
     // Store original text for restoration
     if (!this.originalTexts.has(node)) {
       this.originalTexts.set(node, node.textContent);
@@ -123,9 +131,94 @@ class TranslationRenderer {
       }
     }
 
+    // Ensure translation is plain text only (strip any HTML tags)
+    const cleanTranslation = this.stripHtmlTags(translation);
+
     // Replace text content
-    node.textContent = translation;
+    node.textContent = cleanTranslation;
     this.translatedElements.add(parent);
+  }
+
+  /**
+   * Strip HTML tags from text to ensure plain text output in replace mode
+   */
+  stripHtmlTags(text) {
+    if (typeof text !== 'string') {
+      return String(text || '');
+    }
+
+    // Remove HTML tags and decode HTML entities
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+    return tempDiv.textContent || tempDiv.innerText || '';
+  }
+
+  /**
+   * Clean up any bilingual elements that might interfere with replace mode
+   */
+  cleanupBilingualElements(element) {
+    // Remove any bilingual containers within the element
+    const bilingualContainers = element.querySelectorAll('.ot-bilingual-container, .ot-paragraph-bilingual');
+    bilingualContainers.forEach(container => {
+      // Remove bilingual-specific classes
+      container.classList.remove('ot-bilingual-container', 'ot-paragraph-bilingual', 'ot-original-only');
+
+      // Remove bilingual-specific attributes
+      container.removeAttribute('data-original-lang');
+      container.removeAttribute('data-translated-lang');
+      container.removeAttribute('aria-label');
+      container.removeAttribute('role');
+
+      // Remove translated sections
+      const translatedSections = container.querySelectorAll('.ot-paragraph-translated, .ot-original-text, .ot-translated-text');
+      translatedSections.forEach(section => section.remove());
+    });
+
+    // Also check the element itself
+    if (element.classList.contains('ot-bilingual-container') ||
+        element.classList.contains('ot-paragraph-bilingual')) {
+      element.classList.remove('ot-bilingual-container', 'ot-paragraph-bilingual', 'ot-original-only');
+      element.removeAttribute('data-original-lang');
+      element.removeAttribute('data-translated-lang');
+      element.removeAttribute('aria-label');
+      element.removeAttribute('role');
+
+      const translatedSections = element.querySelectorAll('.ot-paragraph-translated, .ot-original-text, .ot-translated-text');
+      translatedSections.forEach(section => section.remove());
+    }
+  }
+
+  /**
+   * Clean up all bilingual elements in the entire document
+   */
+  cleanupAllBilingualElements() {
+    // Remove all bilingual containers from the document
+    const allBilingualContainers = document.querySelectorAll('.ot-bilingual-container, .ot-paragraph-bilingual');
+    allBilingualContainers.forEach(container => {
+      // Remove bilingual-specific classes
+      container.classList.remove('ot-bilingual-container', 'ot-paragraph-bilingual', 'ot-original-only');
+
+      // Remove bilingual-specific attributes
+      container.removeAttribute('data-original-lang');
+      container.removeAttribute('data-translated-lang');
+      container.removeAttribute('aria-label');
+      container.removeAttribute('role');
+
+      // Remove translated sections
+      const translatedSections = container.querySelectorAll('.ot-paragraph-translated, .ot-original-text, .ot-translated-text');
+      translatedSections.forEach(section => section.remove());
+    });
+
+    // Remove any orphaned translated sections
+    const orphanedSections = document.querySelectorAll('.ot-paragraph-translated, .ot-original-text, .ot-translated-text');
+    orphanedSections.forEach(section => section.remove());
+
+    // Remove injected bilingual styles
+    const bilingualStyles = document.getElementById('open-translate-bilingual-styles');
+    if (bilingualStyles) {
+      bilingualStyles.remove();
+      this.styleInjected = false;
+    }
   }
 
   /**
@@ -459,31 +552,12 @@ class TranslationRenderer {
       }
     });
 
-    // Remove any remaining bilingual containers that might not have been tracked
-    document.querySelectorAll('.ot-paragraph-bilingual').forEach(container => {
-      const translatedSection = container.querySelector('.ot-paragraph-translated');
-      if (translatedSection) {
-        translatedSection.remove();
-      }
-
-      // Remove bilingual classes and attributes
-      container.classList.remove('ot-paragraph-bilingual');
-      container.removeAttribute('data-original-lang');
-      container.removeAttribute('data-translated-lang');
-      container.removeAttribute('aria-label');
-      container.removeAttribute('role');
-    });
+    // 彻底清理所有双语模式残留
+    this.cleanupAllBilingualElements();
 
     // Clear tracking data
     this.originalTexts.clear();
     this.translatedElements.clear();
-
-    // Remove injected styles
-    const style = document.getElementById('open-translate-bilingual-styles');
-    if (style) {
-      style.remove();
-      this.styleInjected = false;
-    }
   }
 
   showOriginalOnly() {
@@ -547,10 +621,13 @@ class TranslationRenderer {
       return;
     }
 
-    const oldMode = this.translationMode;
-
     // 先恢复原始状态
     this.restoreOriginalText();
+
+    // 如果切换到Replace模式，确保彻底清理双语模式残留
+    if (newMode === 'replace') {
+      this.cleanupAllBilingualElements();
+    }
 
     // 设置新模式
     this.setMode(newMode);
@@ -596,17 +673,34 @@ class TranslationRenderer {
    */
   hasTranslatableChanges(mutation) {
     if (mutation.type === 'characterData') {
-      return mutation.target.parentElement && 
-             !mutation.target.parentElement.closest('.ot-bilingual-container');
+      return mutation.target.parentElement &&
+             !mutation.target.parentElement.closest('.ot-bilingual-container, .ot-paragraph-bilingual, .ot-paragraph-translated');
     }
-    
+
     if (mutation.type === 'childList') {
-      return Array.from(mutation.addedNodes).some(node => 
-        node.nodeType === Node.ELEMENT_NODE && 
+      // 忽略翻译相关的DOM变化
+      const isTranslationRelated = Array.from(mutation.addedNodes).some(node =>
+        node.nodeType === Node.ELEMENT_NODE &&
+        (node.classList?.contains('ot-bilingual-container') ||
+         node.classList?.contains('ot-paragraph-bilingual') ||
+         node.classList?.contains('ot-paragraph-translated'))
+      ) || Array.from(mutation.removedNodes).some(node =>
+        node.nodeType === Node.ELEMENT_NODE &&
+        (node.classList?.contains('ot-bilingual-container') ||
+         node.classList?.contains('ot-paragraph-bilingual') ||
+         node.classList?.contains('ot-paragraph-translated'))
+      );
+
+      if (isTranslationRelated) {
+        return false;
+      }
+
+      return Array.from(mutation.addedNodes).some(node =>
+        node.nodeType === Node.ELEMENT_NODE &&
         !node.classList?.contains('ot-bilingual-container')
       );
     }
-    
+
     return false;
   }
 
@@ -614,21 +708,7 @@ class TranslationRenderer {
    * 检查元素是否在非内容区域
    */
   isInNonContentArea(element) {
-    // 检查是否在排除的选择器范围内
-    const excludeSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT;
-
-    for (const selector of excludeSelectors) {
-      try {
-        if (element.closest(selector)) {
-          return true;
-        }
-      } catch (e) {
-        // 忽略无效的选择器
-        continue;
-      }
-    }
-
-    return false;
+    return isExcludedElement(element, []);
   }
 
   /**

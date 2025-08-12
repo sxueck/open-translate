@@ -17,8 +17,10 @@ function hasSignificantText(text) {
  */
 class TextExtractor {
   constructor(options = {}) {
-    // Import shared constants and utilities
-    this.excludeSelectors = options.excludeSelectors || DOM_SELECTORS.EXCLUDE_DEFAULT;
+    // 合并默认排除选择器和用户自定义选择器
+    const userSelectors = options.excludeSelectors ?
+      options.excludeSelectors.split('\n').filter(s => s.trim()) : [];
+    this.excludeSelectors = [...DOM_SELECTORS.EXCLUDE_DEFAULT, ...userSelectors];
     this.blockElements = DOM_SELECTORS.BLOCK_ELEMENTS;
 
     // Enhanced caching system
@@ -170,7 +172,7 @@ class TextExtractor {
 
     containers.forEach(container => {
       // 跳过明显的非内容区域
-      if (this.isNonContentArea(container)) {
+      if (this.isInNonContentArea(container)) {
         return;
       }
 
@@ -274,22 +276,7 @@ class TextExtractor {
     };
   }
 
-  /**
-   * 检查是否为非内容区域
-   */
-  isNonContentArea(element) {
-    const classList = element.classList;
-    const id = element.id;
 
-    // 检查常见的非内容区域类名和ID
-    const nonContentPatterns = [
-      /sidebar|side-bar|nav|menu|header|footer|toolbar|banner|ad|widget|meta|tag|share|comment|related|recommend/i
-    ];
-
-    return nonContentPatterns.some(pattern =>
-      pattern.test(classList.toString()) || pattern.test(id)
-    );
-  }
 
   /**
    * 优化后的内容分数计算方法
@@ -408,6 +395,11 @@ class TextExtractor {
       return false;
     }
 
+    // 排除非显示属性中的文本（如title、alt、placeholder等）
+    if (this.isInNonDisplayAttribute(node)) {
+      return false;
+    }
+
     // 特殊处理：允许内联代码标签中的文本被翻译
     const codeParent = node.parentElement.closest('code');
     if (codeParent) {
@@ -437,38 +429,50 @@ class TextExtractor {
   }
 
   /**
-   * 检查节点是否在非内容区域
+   * Check if text node is from non-display attributes
    */
-  isInNonContentArea(element) {
-    // 检查是否在排除的选择器范围内
-    const excludeSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT;
+  isInNonDisplayAttribute(node) {
+    if (!node || !node.parentElement) return false;
 
-    for (const selector of excludeSelectors) {
-      try {
-        if (element.closest(selector)) {
-          return true;
-        }
-      } catch (e) {
-        // 忽略无效的选择器
-        continue;
+    const parent = node.parentElement;
+
+    // 检查父元素是否是表单元素的占位符或隐藏输入
+    if (parent.tagName && parent.tagName.toLowerCase() === 'input') {
+      const inputType = parent.getAttribute('type');
+      if (inputType === 'hidden' || parent.hasAttribute('placeholder')) {
+        return true;
       }
     }
 
-    // 检查是否在导航相关的元素中
-    const navParent = element.closest('nav, .nav, .navbar, .navigation, .menu, .breadcrumb');
-    if (navParent) {
+    // 检查是否是专门用于显示属性内容的元素
+    if (parent.classList.contains('tooltip') ||
+        parent.classList.contains('title') ||
+        parent.classList.contains('alt-text') ||
+        parent.hasAttribute('role') && parent.getAttribute('role') === 'tooltip') {
       return true;
     }
 
-    // 检查是否在侧边栏中
-    const sidebarParent = element.closest('aside, .sidebar, .side-bar, .widget, .widgets');
-    if (sidebarParent) {
-      return true;
+    // 检查是否是通过CSS生成的内容（伪元素）
+    try {
+      const computedStyle = window.getComputedStyle(parent, '::before');
+      if (computedStyle && computedStyle.content &&
+          computedStyle.content !== 'none' && computedStyle.content !== '""') {
+        return true;
+      }
+
+      const afterStyle = window.getComputedStyle(parent, '::after');
+      if (afterStyle && afterStyle.content &&
+          afterStyle.content !== 'none' && afterStyle.content !== '""') {
+        return true;
+      }
+    } catch (e) {
+      // 忽略样式检查错误
     }
 
-    // 检查是否在页眉页脚中
-    const headerFooterParent = element.closest('header, footer, .header, .footer, .topbar, .top-bar');
-    if (headerFooterParent) {
+    // 检查是否在隐藏元素中
+    if (parent.style.display === 'none' ||
+        parent.style.visibility === 'hidden' ||
+        parent.hasAttribute('hidden')) {
       return true;
     }
 
@@ -476,31 +480,14 @@ class TextExtractor {
   }
 
   /**
-   * Check if element should be excluded from translation
+   * 检查节点是否在非内容区域
    */
-  isExcludedElement(element) {
-    if (!element || !element.tagName) return true;
-
-    const tagName = element.tagName.toLowerCase();
-    
-    // Check tag name exclusions
-    if (this.excludeSelectors.some(selector => {
-      if (selector.startsWith('[') || selector.startsWith('.')) {
-        return element.matches(selector);
-      }
-      return tagName === selector;
-    })) {
-      return true;
-    }
-
-    // Check for contenteditable
-    if (element.contentEditable === 'true') return true;
-
-    // Check for input elements
-    if (['input', 'textarea', 'select', 'button'].includes(tagName)) return true;
-
-    return false;
+  isInNonContentArea(element) {
+    // 统一使用 constants.js 中的排除选择器配置
+    return isExcludedElement(element, []);
   }
+
+
 
   /**
    * Setup DOM mutation observer for intelligent cache invalidation
@@ -674,19 +661,36 @@ class TextExtractor {
 
       const group = paragraphGroups.get(paragraphId);
       group.textNodes.push(textNode);
-      group.combinedText += (group.combinedText ? ' ' : '') + textNode.text;
+
+      // In replace mode, ensure we only use plain text content
+      const textContent = options.translationMode === 'replace'
+        ? this.stripHtmlFromText(textNode.text)
+        : textNode.text;
+
+      group.combinedText += (group.combinedText ? ' ' : '') + textContent;
     });
 
-    // Extract HTML content for each group to preserve structure
-    paragraphGroups.forEach(group => {
-      group.htmlContent = this.extractHtmlContent(group.container);
+    // Extract HTML content for each group to preserve structure (only for bilingual mode)
+    // In replace mode, we should only use plain text to avoid HTML tags in translations
+    const shouldPreserveHtml = options.preserveHtml !== false && options.translationMode !== 'replace';
 
-      // If the container has HTML content that differs significantly from plain text,
-      // use the HTML content for translation to preserve structure
-      if (group.htmlContent && this.shouldUseHtmlContent(group.container, group.combinedText)) {
-        group.combinedText = this.extractTextFromHtml(group.htmlContent);
-      }
-    });
+    if (shouldPreserveHtml) {
+      paragraphGroups.forEach(group => {
+        group.htmlContent = this.extractHtmlContent(group.container);
+
+        // If the container has HTML content that differs significantly from plain text,
+        // use the HTML content for translation to preserve structure
+        if (group.htmlContent && this.shouldUseHtmlContent(group.container, group.combinedText)) {
+          group.combinedText = this.extractTextFromHtml(group.htmlContent);
+        }
+      });
+    } else if (options.translationMode === 'replace') {
+      // In replace mode, ensure all text is plain text without HTML tags
+      paragraphGroups.forEach(group => {
+        group.combinedText = this.stripHtmlFromText(group.combinedText);
+        group.htmlContent = ''; // Clear HTML content to prevent any HTML processing
+      });
+    }
 
     // Convert to array and handle large groups
     const groups = Array.from(paragraphGroups.values());
@@ -788,6 +792,20 @@ class TextExtractor {
   }
 
   /**
+   * Strip HTML tags from text content to ensure plain text
+   */
+  stripHtmlFromText(text) {
+    if (typeof text !== 'string') {
+      return String(text || '');
+    }
+
+    // Remove HTML tags and decode HTML entities
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+    return tempDiv.textContent || tempDiv.innerText || '';
+  }
+
+  /**
    * Check if we should use HTML content instead of plain text for translation
    */
   shouldUseHtmlContent(container, plainText) {
@@ -797,14 +815,13 @@ class TextExtractor {
     const htmlElements = container.querySelectorAll('a, code, span, strong, em, b, i, u, mark, sup, sub, small, big, tt, kbd, samp, var');
     if (htmlElements.length === 0) return false;
 
-    // Check if any of these elements contain significant text or important attributes
+    // Check if any of these elements contain significant text or important display attributes
     let hasSignificantHtmlText = false;
     htmlElements.forEach(el => {
       const text = el.textContent.trim();
-      // Consider element significant if it has text content or important attributes like href
+      // 只考虑影响显示的属性，排除title等非显示属性
       if ((text.length > 0 && hasSignificantText(text)) ||
           el.hasAttribute('href') ||
-          el.hasAttribute('title') ||
           el.classList.length > 0) {
         hasSignificantHtmlText = true;
       }
@@ -867,13 +884,13 @@ class TextExtractor {
   }
 
   /**
-   * Get important attributes from an element
+   * Get important attributes from an element (excluding non-display attributes)
    */
   getImportantAttributes(element) {
     let attrs = '';
 
-    // Handle standard attributes
-    ['href', 'title', 'class', 'id', 'target', 'rel'].forEach(attr => {
+    // 只保留影响显示的属性，排除title、alt、placeholder等非显示属性
+    ['href', 'class', 'id', 'target', 'rel'].forEach(attr => {
       if (element.hasAttribute(attr)) {
         const value = element.getAttribute(attr);
         if (value) {
@@ -882,7 +899,7 @@ class TextExtractor {
       }
     });
 
-    // Handle data-* and aria-* attributes
+    // 只保留必要的data-*和aria-*属性
     Array.from(element.attributes).forEach(attr => {
       if (attr.name.startsWith('data-') || attr.name.startsWith('aria-')) {
         attrs += ` ${attr.name}="${this.escapeAttributeValue(attr.value)}"`;

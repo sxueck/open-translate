@@ -113,11 +113,23 @@ function formatError(error) {
 function isExcludedElement(element, excludeSelectors = []) {
   if (!element || !element.matches) return true;
 
+  const tagName = element.tagName.toLowerCase();
+
+  // Check for contenteditable elements
+  if (element.contentEditable === 'true') return true;
+
+  // Check for form input elements
+  if (['input', 'textarea', 'select', 'button'].includes(tagName)) return true;
+
+  // Check against all exclude selectors
   const allSelectors = [...DOM_SELECTORS.EXCLUDE_DEFAULT, ...excludeSelectors];
 
   return allSelectors.some(selector => {
     try {
-      return element.matches(selector);
+      if (selector.startsWith('[') || selector.startsWith('.') || selector.startsWith('#')) {
+        return element.matches(selector);
+      }
+      return tagName === selector;
     } catch (e) {
       return false;
     }

@@ -26,9 +26,6 @@ jobs:
     - name: Run build validation
       run: npm run build
       
-    - name: Generate test icons
-      run: npm run generate-icons
-      
     - name: Validate extension structure
       run: |
         echo "Validating extension structure..."
@@ -68,26 +65,28 @@ jobs:
         else
           echo "✓ Version consistency: $manifest_version"
         fi
-        
-    - name: Test icon generation
+
+    - name: Validate icon files
       run: |
-        sudo apt-get update
-        sudo apt-get install -y inkscape
-        
-        # Test PNG generation from SVG
-        for size in 16 32 48 128; do
-          if [ -f "assets/icons/icon${size}.svg" ]; then
-            inkscape -w ${size} -h ${size} "assets/icons/icon${size}.svg" -o "test-icon${size}.png"
-            if [ -f "test-icon${size}.png" ]; then
-              echo "✓ Successfully generated test PNG icon for size ${size}"
-              rm "test-icon${size}.png"
-            else
-              echo "Error: Failed to generate PNG icon for size ${size}"
-              exit 1
-            fi
+        echo "Validating icon files..."
+
+        # Check required icon files exist
+        required_icons=(
+          "assets/icons/icon16.png"
+          "assets/icons/icon32.png"
+          "assets/icons/icon48.png"
+          "assets/icons/icon128.png"
+        )
+
+        for icon in "${required_icons[@]}"; do
+          if [ ! -f "$icon" ]; then
+            echo "Error: Required icon file $icon not found"
+            exit 1
+          else
+            echo "✓ $icon"
           fi
         done
-        
+
     - name: Create test package
       run: |
         mkdir -p test-package

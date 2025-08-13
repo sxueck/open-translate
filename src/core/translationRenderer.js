@@ -358,9 +358,11 @@ class TranslationRenderer {
     container.setAttribute('data-original-lang', this.detectLanguage(originalText));
     container.setAttribute('data-translated-lang', 'zh-CN');
 
-    // Create translated content section only
+    // Create translated content section for all elements (including headings)
+    // This preserves the original HTML structure including links
     const translatedSection = document.createElement('div');
     translatedSection.className = 'ot-paragraph-translated';
+    translatedSection.setAttribute('data-bilingual-mode', 'true');
 
     // Handle HTML content in translation if available
     if (this.containsHtmlTags(result.translation)) {
@@ -378,12 +380,12 @@ class TranslationRenderer {
     translatedSection.style.visibility = 'visible';
     translatedSection.style.opacity = '1';
 
-    // Add accessibility support
-    container.setAttribute('aria-label', `Original: ${originalText}. Translation: ${result.translation}`);
-    container.setAttribute('role', 'group');
-
     // 在原文后面直接添加翻译内容，不修改原文
     container.appendChild(translatedSection);
+
+    // Add accessibility support
+    container.setAttribute('aria-label', `Original: ${result.originalText}. Translation: ${result.translation}`);
+    container.setAttribute('role', 'group');
 
     // Mark as translated
     this.translatedElements.add(container);
@@ -395,8 +397,6 @@ class TranslationRenderer {
 
 
   }
-
-
 
   /**
    * Simple language detection for better styling
@@ -505,64 +505,30 @@ class TranslationRenderer {
         color: inherit;
       }
 
-      /* 译文样式 - 使用无衬线字体和优化间距 */
+      /* 译文样式 - 简化设计 */
       .ot-paragraph-translated {
-        margin-top: 8px;
+        margin-top: 4px;
         padding: 0;
         color: inherit;
-        font-family: BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'Noto Sans';
+        font-family: inherit;
         font-size: inherit;
-        font-weight: 350;
-        font-style: normal;
-        line-height: 1.6;
-        letter-spacing: 0.02em;
+        font-weight: inherit;
+        font-style: inherit;
+        line-height: inherit;
+        letter-spacing: inherit;
         text-decoration: inherit;
-        opacity: 0.92;
+        background: none;
+        border: none;
+        border-radius: 0;
+        transition: none;
+        position: relative;
       }
 
-      /* 原文样式调整 - 保持原有字体但优化间距 */
-      .ot-paragraph-bilingual:not(.ot-paragraph-translated) {
-        line-height: 1.5;
-        margin-bottom: 2px;
-      }
 
-      /* 响应式调整 */
-      @media (max-width: 768px) {
-        .ot-paragraph-bilingual {
-          margin: 0;
-          padding: 0;
-        }
 
-        .ot-paragraph-translated {
-          margin-top: 8px;
-          line-height: 1.5;
-          font-size: 0.95em;
-          font-weight: 350;
-        }
-      }
 
-      @media (max-width: 480px) {
-        .ot-paragraph-translated {
-          margin-top: 4px;
-          line-height: 1.45;
-          font-size: 0.9em;
-        }
-      }
 
-      /* 深色模式适配 */
-      @media (prefers-color-scheme: dark) {
-        .ot-paragraph-translated {
-          opacity: 0.95;
-        }
-      }
 
-      /* 高对比度模式适配 */
-      @media (prefers-contrast: high) {
-        .ot-paragraph-translated {
-          opacity: 1;
-          font-weight: 350;
-        }
-      }
 
       /* 仅显示原文模式 */
       .ot-paragraph-bilingual.ot-original-only .ot-paragraph-translated {
@@ -859,9 +825,9 @@ class TranslationRenderer {
         background-color: ${siteStyles.backgroundColor || 'transparent'};
       }
 
-      /* 译文字体优化 - 根据检测到的语言环境选择最佳无衬线字体 */
+      /* 译文字体优化 - 继承原文字体 */
       .ot-paragraph-translated {
-        font-family: ${this.getOptimalSansSerifFont()};
+        font-family: inherit;
       }
 
       /* 根据网站背景色调整译文透明度 */
@@ -878,6 +844,11 @@ class TranslationRenderer {
   getOptimalSansSerifFont() {
     const userAgent = navigator.userAgent;
     const language = navigator.language || 'en';
+
+    // 针对中文环境优化字体栈
+    if (language.startsWith('zh')) {
+      return `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Source Han Sans SC', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', sans-serif`;
+    }
 
     // 根据系统和语言环境选择最佳字体
     if (language.startsWith('zh')) {
@@ -905,51 +876,36 @@ class TranslationRenderer {
    * 生成对比度调整样式
    */
   generateContrastAdjustments(siteStyles) {
-    // 简单的亮度检测
-    const bgColor = siteStyles.backgroundColor;
-    let isDark = false;
-
-    if (bgColor && bgColor !== 'transparent') {
-      // 简化的亮度检测
-      isDark = bgColor.includes('rgb') &&
-               (bgColor.includes('0, 0, 0') ||
-                bgColor.includes('rgba(0, 0, 0') ||
-                bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/) &&
-                bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)[1] < 128);
-    }
-
-    return `
-      .ot-paragraph-translated {
-        opacity: ${isDark ? '0.95' : '0.92'};
-      }
-    `;
+    return '';
   }
 
   /**
    * 生成间距调整样式
    */
   generateSpacingAdjustments(siteStyles) {
-    const fontSize = siteStyles.fontSize;
-    let marginTop = '8px';
-    let lineHeight = '1.6';
+    return '';
+  }
 
-    if (fontSize) {
-      const size = parseFloat(fontSize);
-      if (size <= 12) {
-        marginTop = '6px';
-        lineHeight = '1.5';
-      } else if (size >= 18) {
-        marginTop = '10px';
-        lineHeight = '1.65';
-      }
+  /**
+   * 获取用于缓存的纯文本翻译结果
+   * 确保缓存中只存储纯文本，双语模式需要重新计算样式
+   */
+  getTranslationForCache(translation) {
+    // 如果是HTML内容，提取纯文本
+    if (typeof translation === 'string' && translation.includes('<')) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = translation;
+      return tempDiv.textContent || tempDiv.innerText || translation;
     }
+    return translation;
+  }
 
-    return `
-      .ot-paragraph-translated {
-        margin-top: ${marginTop};
-        line-height: ${lineHeight};
-      }
-    `;
+  /**
+   * 检查是否需要重新计算双语样式
+   * 双语模式下即使有缓存也需要重新应用样式
+   */
+  shouldRecalculateBilingualStyles(mode) {
+    return mode === 'paragraph-bilingual';
   }
 
   /**

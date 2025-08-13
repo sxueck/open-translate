@@ -177,19 +177,21 @@ class TranslationService {
       '3. Preserve technical terms, proper nouns, and brand names when appropriate',
       '4. Keep the same formatting structure (line breaks, spacing, punctuation style)',
       '5. For ambiguous terms, choose the most contextually appropriate translation',
-      '6. Only return the translation without any additional text, explanation, or commentary'
+      '6. Only return the translation without any additional text, explanation, or commentary',
+      '7. Ensure proper grammar, sentence flow, and natural expression in the target language',
+      '8. When translating to Chinese, always add a space between Chinese text and English words/numbers'
     ];
 
     // Add HTML handling instructions only if text contains HTML AND we're not in replace mode
     const shouldPreserveHtml = this.containsHtmlTags(text) && options.translationMode !== 'replace';
     if (shouldPreserveHtml) {
-      baseInstructions.push('7. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
-      baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
-      baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in the translation');
-      baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
-      baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
+      baseInstructions.push('9. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('10. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('11. Maintain the exact same HTML structure, nesting, and tag order in the translation');
+      baseInstructions.push('12. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('13. Do not add, remove, or modify any HTML tags or attributes');
     } else if (options.translationMode === 'replace') {
-      baseInstructions.push('7. Return only plain text translation without any HTML tags, markup, or formatting');
+      baseInstructions.push('9. Return only plain text translation without any HTML tags, markup, or formatting');
     }
 
     // Add language-specific instructions
@@ -220,6 +222,11 @@ Translation:`;
       instructions.push('Chinese-specific requirements:');
       instructions.push('- Use appropriate Chinese expressions and idioms when suitable');
       instructions.push('- Maintain formal/informal tone based on context');
+      instructions.push('- Ensure smooth sentence flow and natural grammar structure');
+      instructions.push('- Use proper Chinese punctuation and formatting conventions');
+      instructions.push('- Always add a space between Chinese characters and English words, numbers, or technical terms');
+      instructions.push('- Avoid awkward literal translations; prioritize natural Chinese expression');
+      instructions.push('- Use appropriate measure words and sentence connectors for better readability');
       if (targetLang === 'Simplified Chinese') {
         instructions.push('- Use simplified Chinese characters and mainland China conventions');
         instructions.push('- Prefer commonly used modern Chinese expressions');
@@ -538,17 +545,19 @@ Translation:`;
       '3. Preserve technical terms, proper nouns, and brand names when appropriate',
       '4. Return translations in the same numbered format as the input',
       '5. Each translation should be on a separate line with its corresponding number',
-      '6. Only return the numbered translations without any additional text or commentary'
+      '6. Only return the numbered translations without any additional text or commentary',
+      '7. Ensure proper grammar, sentence flow, and natural expression in the target language',
+      '8. When translating to Chinese, always add a space between Chinese text and English words/numbers'
     ];
 
     // Check if any text in the batch contains HTML
     const hasHtml = batch.some(item => this.containsHtmlTags(item.text));
     if (hasHtml) {
-      baseInstructions.push('7. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
-      baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
-      baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in each translation');
-      baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
-      baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
+      baseInstructions.push('9. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('10. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('11. Maintain the exact same HTML structure, nesting, and tag order in each translation');
+      baseInstructions.push('12. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('13. Do not add, remove, or modify any HTML tags or attributes');
     }
 
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
@@ -876,7 +885,9 @@ Translations:`;
       '3. Preserve technical terms, proper nouns, and brand names when appropriate',
       '4. Return translations in the same numbered format as the input',
       '5. Each translation should be on a separate line with its corresponding number',
-      '6. Only return the numbered translations without any additional text or commentary'
+      '6. Ensure proper grammar, sentence flow, and natural expression in the target language',
+      '7. When translating to Chinese, always add a space between Chinese text and English words/numbers',
+      '8. Only return the numbered translations without any additional text or commentary'
     ];
 
     // Check if any group contains HTML and handle based on translation mode
@@ -884,13 +895,13 @@ Translations:`;
     const shouldPreserveHtml = hasHtml && options.translationMode !== 'replace';
 
     if (shouldPreserveHtml) {
-      baseInstructions.push('7. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
-      baseInstructions.push('8. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
-      baseInstructions.push('9. Maintain the exact same HTML structure, nesting, and tag order in each translation');
-      baseInstructions.push('10. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
-      baseInstructions.push('11. Do not add, remove, or modify any HTML tags or attributes');
+      baseInstructions.push('9. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('10. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('11. Maintain the exact same HTML structure, nesting, and tag order in each translation');
+      baseInstructions.push('12. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('13. Do not add, remove, or modify any HTML tags or attributes');
     } else if (options.translationMode === 'replace') {
-      baseInstructions.push('7. Return only plain text translations without any HTML tags, markup, or formatting');
+      baseInstructions.push('9. Return only plain text translations without any HTML tags, markup, or formatting');
     }
 
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);

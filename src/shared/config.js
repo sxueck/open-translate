@@ -15,7 +15,7 @@ class ConfigManager {
         maxTokens: 2000,
         timeout: 30000
       },
-      translationMode: 'paragraph-bilingual',
+      translationMode: TRANSLATION_MODES.BILINGUAL,
       targetLanguage: 'zh-CN',
       sourceLanguage: 'auto',
       autoTranslate: false,
@@ -174,9 +174,9 @@ class ConfigManager {
     }
 
     // Validate translation mode
-    const validModes = ['replace', 'paragraph-bilingual'];
+    const validModes = [TRANSLATION_MODES.REPLACE, TRANSLATION_MODES.BILINGUAL];
     if (validated.translationMode && !validModes.includes(validated.translationMode)) {
-      validated.translationMode = 'paragraph-bilingual';
+      validated.translationMode = TRANSLATION_MODES.BILINGUAL;
     }
 
     return validated;

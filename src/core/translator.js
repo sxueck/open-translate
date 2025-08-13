@@ -129,10 +129,13 @@ class TranslationService {
       throw new Error('API key not configured');
     }
 
-    const prompt = this.buildTranslationPrompt(text, targetLanguage, sourceLanguage, options);
-    
+    // 增强选项，添加上下文信息
+    const enhancedOptions = await this.enhanceTranslationOptions(options, text);
+
+    const prompt = this.buildTranslationPrompt(text, targetLanguage, sourceLanguage, enhancedOptions);
+
     try {
-      const response = await this.makeAPIRequest(prompt);
+      const response = await this.makeAPIRequest(prompt, enhancedOptions);
       return this.extractTranslation(response);
     } catch (error) {
 
@@ -154,69 +157,128 @@ class TranslationService {
   }
 
   /**
+   * Enhance translation options with context information
+   */
+  async enhanceTranslationOptions(options = {}, text = '') {
+    const enhanced = { ...options };
+
+    // Add page title if available
+    if (typeof document !== 'undefined' && !enhanced.title) {
+      enhanced.title = document.title || '';
+    }
+
+    enhanced.text = text;
+    return enhanced;
+  }
+
+  /**
    * Build translation prompt for API
    */
   buildTranslationPrompt(text, targetLanguage, sourceLanguage, options = {}) {
     const targetLang = LANGUAGE_MAP[targetLanguage] || targetLanguage;
-    const sourceLang = sourceLanguage === 'auto' ? 'the source language' : (LANGUAGE_MAP[sourceLanguage] || sourceLanguage);
-    const prompt = this.buildContextualPrompt(text, targetLang, sourceLang, options);
 
-    return prompt;
+    // Build system and user prompts
+    const systemPrompt = this.buildSystemPrompt(targetLang, options);
+    const userPrompt = this.buildUserPrompt(text, targetLang);
+
+    // Return combined prompt for backward compatibility
+    const combinedPrompt = `${systemPrompt}\n\n${userPrompt}`;
+
+    // Also provide separated prompts in options for APIs that support system messages
+    options.systemPrompt = systemPrompt;
+    options.userPrompt = userPrompt;
+
+    return combinedPrompt;
   }
 
   /**
    * Build contextual translation prompt with language-specific optimizations
    */
-  buildContextualPrompt(text, targetLang, sourceLang, options = {}) {
+  buildContextualPrompt(text, targetLang, options = {}) {
+    const systemPrompt = this.buildSystemPrompt(targetLang, options);
+    const userPrompt = this.buildUserPrompt(text, targetLang);
+
+    return `${systemPrompt}\n\n${userPrompt}`;
+  }
+
+  /**
+   * Build system prompt (role definition and rules)
+   */
+  buildSystemPrompt(targetLang, options = {}) {
     const baseInstructions = [
-      `You are a professional translator. Translate the following text from ${sourceLang} to ${targetLang}.`,
+      `You are a professional ${targetLang} native translator who needs to fluently translate text into ${targetLang}.`,
       '',
-      'Requirements:',
-      '1. Maintain the original meaning, tone, and context accurately',
-      '2. Use natural, fluent language that sounds native to the target language',
-      '3. Preserve technical terms, proper nouns, and brand names when appropriate',
-      '4. Keep the same formatting structure (line breaks, spacing, punctuation style)',
-      '5. For ambiguous terms, choose the most contextually appropriate translation',
-      '6. Only return the translation without any additional text, explanation, or commentary',
-      '7. Ensure proper grammar, sentence flow, and natural expression in the target language',
-      '8. When translating to Chinese, always add a space between Chinese text and English words/numbers'
+      '## Translation Rules',
+      '1. Output only the translated content, without explanations or additional content (such as "Here\'s the translation:" or "Translation as follows:")',
+      '2. The returned translation must maintain exactly the same number of paragraphs and format as the original text',
+      '3. If the text contains HTML tags, consider where the tags should be placed in the translation while maintaining fluency',
+      '4. For content that should not be translated (such as proper nouns, code, etc.), keep the original text',
+      '5. Output translation directly (no separators, no extra text)',
+      '6. Maintain the original meaning, tone, and context accurately',
+      '7. Use natural, fluent language that sounds native to the target language',
+      '8. Preserve technical terms, proper nouns, and brand names when appropriate',
+      '9. For ambiguous terms, choose the most contextually appropriate translation',
+      '10. Maintain consistency in terminology throughout the text',
+      '11. Preserve the original tone and style (formal, informal, technical, casual)'
     ];
 
     // Add HTML handling instructions only if text contains HTML AND we're not in replace mode
-    const shouldPreserveHtml = this.containsHtmlTags(text) && options.translationMode !== 'replace';
+    const shouldPreserveHtml = this.containsHtmlTags(options.text || text) && options.translationMode !== TRANSLATION_MODES.REPLACE;
     if (shouldPreserveHtml) {
-      baseInstructions.push('9. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
-      baseInstructions.push('10. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
-      baseInstructions.push('11. Maintain the exact same HTML structure, nesting, and tag order in the translation');
-      baseInstructions.push('12. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
-      baseInstructions.push('13. Do not add, remove, or modify any HTML tags or attributes');
+      baseInstructions.push('12. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('13. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('14. Maintain the exact same HTML structure, nesting, and tag order in the translation');
+      baseInstructions.push('15. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('16. Do not add, remove, or modify any HTML tags or attributes');
     } else if (options.translationMode === 'replace') {
-      baseInstructions.push('9. Return only plain text translation without any HTML tags, markup, or formatting');
+      baseInstructions.push('12. Return only plain text translation without any HTML tags, markup, or formatting');
     }
 
+    // Add context awareness section
+    const contextSection = this.buildContextSection(options);
+
     // Add language-specific instructions
-    const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
+    const specificInstructions = this.getLanguageSpecificInstructions(targetLang);
 
     // Add technical content instructions if needed
-    const technicalInstructions = this.getTechnicalInstructions(text);
+    const technicalInstructions = this.getTechnicalInstructions(options.text || text);
 
-    const fullInstructions = [...baseInstructions, ...specificInstructions, ...technicalInstructions];
+    const allInstructions = [...baseInstructions, ...contextSection, ...specificInstructions, ...technicalInstructions];
 
-    return `${fullInstructions.join('\n')}
+    return allInstructions.join('\n');
+  }
 
-Text to translate:
-${text}
+  /**
+   * Build user prompt (actual translation request)
+   */
+  buildUserPrompt(text, targetLang) {
+    return `Translate to ${targetLang} (output translation only):
 
-Translation:`;
+${text}`;
+  }
+
+  /**
+   * Build context awareness section
+   */
+  buildContextSection(options = {}) {
+    const contextInstructions = [];
+
+    if (options.title) {
+      contextInstructions.push('');
+      contextInstructions.push('## Context Awareness');
+      contextInstructions.push('Document Metadata:');
+      contextInstructions.push(`Title: 《${options.title}》`);
+    }
+
+    return contextInstructions;
   }
 
   /**
    * Get language-specific translation instructions
    */
-  getLanguageSpecificInstructions(targetLang, sourceLang) {
+  getLanguageSpecificInstructions(targetLang) {
     const instructions = [];
 
-    // Chinese-specific instructions
     if (targetLang.includes('Chinese')) {
       instructions.push('');
       instructions.push('Chinese-specific requirements:');
@@ -227,6 +289,7 @@ Translation:`;
       instructions.push('- Always add a space between Chinese characters and English words, numbers, or technical terms');
       instructions.push('- Avoid awkward literal translations; prioritize natural Chinese expression');
       instructions.push('- Use appropriate measure words and sentence connectors for better readability');
+
       if (targetLang === 'Simplified Chinese') {
         instructions.push('- Use simplified Chinese characters and mainland China conventions');
         instructions.push('- Prefer commonly used modern Chinese expressions');
@@ -242,6 +305,9 @@ Translation:`;
       instructions.push('- Use American English spelling and conventions unless context suggests otherwise');
       instructions.push('- Maintain appropriate register (formal/informal) based on source text');
       instructions.push('- Use natural English sentence structures and idiomatic expressions');
+      instructions.push('- Ensure proper grammar, punctuation, and capitalization');
+      instructions.push('- Use active voice when appropriate for clarity');
+      instructions.push('- Maintain consistency in terminology and style');
     }
 
     // Japanese-specific instructions
@@ -251,6 +317,18 @@ Translation:`;
       instructions.push('- Use appropriate levels of politeness (keigo) based on context');
       instructions.push('- Choose between hiragana, katakana, and kanji appropriately');
       instructions.push('- Maintain natural Japanese sentence flow and particle usage');
+      instructions.push('- Use proper Japanese punctuation and formatting');
+      instructions.push('- Consider cultural context and adapt expressions accordingly');
+    }
+
+    // Korean-specific instructions
+    if (targetLang === 'Korean') {
+      instructions.push('');
+      instructions.push('Korean-specific requirements:');
+      instructions.push('- Use appropriate levels of formality based on context');
+      instructions.push('- Choose between formal and informal speech patterns appropriately');
+      instructions.push('- Maintain natural Korean sentence structure and word order');
+      instructions.push('- Use proper Korean punctuation and formatting');
     }
 
     return instructions;
@@ -301,11 +379,33 @@ Translation:`;
   /**
    * Make API request to translation service
    */
-  async makeAPIRequest(prompt) {
+  async makeAPIRequest(prompt, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
     try {
+      // 系统消息和用户消息分离，以加强 LLM 的注意力
+      let messages;
+      if (options.systemPrompt && options.userPrompt) {
+        messages = [
+          {
+            role: 'system',
+            content: options.systemPrompt
+          },
+          {
+            role: 'user',
+            content: options.userPrompt
+          }
+        ];
+      } else {
+        messages = [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ];
+      }
+
       const response = await fetch(this.config.apiUrl, {
         method: 'POST',
         headers: {
@@ -314,12 +414,7 @@ Translation:`;
         },
         body: JSON.stringify({
           model: this.getCurrentModel(),
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
+          messages: messages,
           temperature: this.config.temperature,
           max_tokens: this.config.maxTokens
         }),
@@ -560,7 +655,7 @@ Translation:`;
       baseInstructions.push('13. Do not add, remove, or modify any HTML tags or attributes');
     }
 
-    const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
+    const specificInstructions = this.getLanguageSpecificInstructions(targetLang);
     const fullInstructions = [...baseInstructions, ...specificInstructions];
 
     // Create numbered text segments
@@ -810,7 +905,7 @@ Translations:`;
 
     for (const batch of mergedBatches) {
       try {
-        const mergedTranslation = await this.translateMergedGroupBatch(batch, targetLanguage, sourceLanguage, options);
+        const mergedTranslation = await this.translateMergedGroupBatch(batch, targetLanguage, options);
         const splitResults = this.splitMergedGroupTranslation(batch, mergedTranslation);
 
         // Call progress callback for each result
@@ -866,8 +961,8 @@ Translations:`;
   /**
    * Translate a merged batch of paragraph groups
    */
-  async translateMergedGroupBatch(batch, targetLanguage, sourceLanguage, options = {}) {
-    const mergedPrompt = this.buildMergedGroupTranslationPrompt(batch, targetLanguage, sourceLanguage, options);
+  async translateMergedGroupBatch(batch, targetLanguage, options = {}) {
+    const mergedPrompt = this.buildMergedGroupTranslationPrompt(batch, targetLanguage, options);
     const response = await this.makeAPIRequest(mergedPrompt);
     return this.extractTranslation(response);
   }
@@ -875,47 +970,82 @@ Translations:`;
   /**
    * Build prompt for merged group translation
    */
-  buildMergedGroupTranslationPrompt(batch, targetLang, sourceLang, options = {}) {
+  buildMergedGroupTranslationPrompt(batch, targetLang, options = {}) {
+    const systemPrompt = this.buildMultipleSystemPrompt(targetLang, options);
+    const userPrompt = this.buildMultipleUserPrompt(batch, targetLang);
+
+    return `${systemPrompt}\n\n${userPrompt}`;
+  }
+
+  /**
+   * Build system prompt for multiple paragraph translation
+   */
+  buildMultipleSystemPrompt(targetLang, options = {}) {
     const baseInstructions = [
-      `You are a professional translator. Translate the following numbered text segments from ${sourceLang} to ${targetLang}.`,
+      `You are a professional ${targetLang} native translator who needs to fluently translate text into ${targetLang}.`,
       '',
-      'Requirements:',
-      '1. Maintain the original meaning, tone, and context accurately for each segment',
-      '2. Use natural, fluent language that sounds native to the target language',
-      '3. Preserve technical terms, proper nouns, and brand names when appropriate',
-      '4. Return translations in the same numbered format as the input',
-      '5. Each translation should be on a separate line with its corresponding number',
-      '6. Ensure proper grammar, sentence flow, and natural expression in the target language',
-      '7. When translating to Chinese, always add a space between Chinese text and English words/numbers',
-      '8. Only return the numbered translations without any additional text or commentary'
+      '## Translation Rules',
+      '1. Output only the translated content, without explanations or additional content (such as "Here\'s the translation:" or "Translation as follows:")',
+      '2. The returned translation must maintain exactly the same number of paragraphs and format as the original text',
+      '3. If the text contains HTML tags, consider where the tags should be placed in the translation while maintaining fluency',
+      '4. For content that should not be translated (such as proper nouns, code, etc.), keep the original text',
+      '5. Return translations in the same numbered format as the input',
+      '6. Each translation should be on a separate line with its corresponding number',
+      '7. Only return the numbered translations without any additional text or commentary',
+      '8. Maintain consistency in terminology across all segments',
+      '9. Preserve the original tone and style for each segment'
     ];
 
-    // Check if any group contains HTML and handle based on translation mode
-    const hasHtml = batch.some(group => this.containsHtmlTags(group.combinedText));
-    const shouldPreserveHtml = hasHtml && options.translationMode !== 'replace';
+    // Add context awareness section
+    const contextSection = this.buildContextSection(options);
 
-    if (shouldPreserveHtml) {
-      baseInstructions.push('9. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
-      baseInstructions.push('10. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
-      baseInstructions.push('11. Maintain the exact same HTML structure, nesting, and tag order in each translation');
-      baseInstructions.push('12. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
-      baseInstructions.push('13. Do not add, remove, or modify any HTML tags or attributes');
-    } else if (options.translationMode === 'replace') {
-      baseInstructions.push('9. Return only plain text translations without any HTML tags, markup, or formatting');
-    }
+    // Add input-output format examples
+    const formatExamples = this.buildFormatExamples();
 
-    const specificInstructions = this.getLanguageSpecificInstructions(targetLang, sourceLang);
-    const fullInstructions = [...baseInstructions, ...specificInstructions];
+    // Add language-specific instructions
+    const specificInstructions = this.getLanguageSpecificInstructions(targetLang);
 
+    const allInstructions = [...baseInstructions, ...contextSection, ...formatExamples, ...specificInstructions];
+
+    return allInstructions.join('\n');
+  }
+
+  /**
+   * Build user prompt for multiple paragraph translation
+   */
+  buildMultipleUserPrompt(batch, targetLang) {
     // Create numbered text segments from paragraph groups
     const numberedTexts = batch.map((group, index) => `${index + 1}. ${group.combinedText}`).join('\n');
 
-    return `${fullInstructions.join('\n')}
+    return `Translate to ${targetLang}:
 
-Text segments to translate:
-${numberedTexts}
+${numberedTexts}`;
+  }
 
-Translations:`;
+  /**
+   * Build format examples for multiple paragraph translation
+   */
+  buildFormatExamples() {
+    return [
+      '',
+      '## Input-Output Format Examples',
+      '### Input Example:',
+      'Paragraph A',
+      '%%',
+      'Paragraph B',
+      '%%',
+      'Paragraph C',
+      '%%',
+      'Paragraph D',
+      '### Output Example:',
+      'Translation A',
+      '%%',
+      'Translation B',
+      '%%',
+      'Translation C',
+      '%%',
+      'Translation D'
+    ];
   }
 
   /**

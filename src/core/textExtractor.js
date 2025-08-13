@@ -686,7 +686,7 @@ class TextExtractor {
           group.combinedText = this.extractTextFromHtml(group.htmlContent);
         }
       });
-    } else if (options.translationMode === 'replace') {
+    } else if (options.translationMode === TRANSLATION_MODES.REPLACE) {
       // In replace mode, ensure all text is plain text without HTML tags
       paragraphGroups.forEach(group => {
         group.combinedText = this.stripHtmlFromText(group.combinedText);

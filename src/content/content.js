@@ -14,7 +14,7 @@ let isTranslated = false;
 let isNavigating = false; // 新增：标记是否正在导航
 let currentTextNodes = [];
 let currentTranslations = [];
-let translationMode = 'paragraph-bilingual';
+let translationMode = TRANSLATION_MODES.REPLACE; // 统一默认为替换模式
 
 /**
  * Initialize content script
@@ -54,11 +54,11 @@ async function loadUserPreferences() {
       'excludeSelectors',
       'preserveFormatting'
     ], (result) => {
-      translationMode = result.translationMode || 'paragraph-bilingual';
+      translationMode = result.translationMode || TRANSLATION_MODES.BILINGUAL;
       translationRenderer.setMode(translationMode);
 
       // 如果是Replace模式，确保清理任何可能的双语模式残留
-      if (translationMode === 'replace') {
+      if (translationMode === TRANSLATION_MODES.REPLACE) {
         translationRenderer.cleanupAllBilingualElements();
       }
 
@@ -174,6 +174,15 @@ async function handleTranslateRequest(options = {}) {
     throw new Error('Page is navigating, translation cancelled');
   }
 
+  // 确保使用正确的翻译模式
+  const requestedMode = options.translationMode || translationMode;
+
+  // 验证模式有效性并更新全局状态
+  if ([TRANSLATION_MODES.REPLACE, TRANSLATION_MODES.BILINGUAL].includes(requestedMode)) {
+    translationMode = requestedMode;
+    translationRenderer.setMode(requestedMode);
+  }
+
   try {
     isTranslating = true;
 
@@ -238,7 +247,7 @@ async function handleTranslateRequest(options = {}) {
       // Use paragraph-based extraction for better concurrent translation
       // Pass translation mode to ensure proper text extraction
       let paragraphGroups = textExtractor.extractParagraphGroups(document.body, {
-        translationMode: options.translationMode || translationMode
+        translationMode: translationMode
       });
 
       if (paragraphGroups.length === 0) {
@@ -324,7 +333,7 @@ async function handleTranslateRequest(options = {}) {
         targetLanguage,
         sourceLanguage,
         progressCallback,
-        { translationMode: options.translationMode || translationMode }
+        { translationMode: translationMode }
       );
 
     }

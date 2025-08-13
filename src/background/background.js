@@ -195,7 +195,7 @@ async function handleRestoreOriginal(tab) {
  */
 async function handleModeSwitch(mode, tab) {
   try {
-    if (!['replace', 'paragraph-bilingual'].includes(mode)) {
+    if (![TRANSLATION_MODES.REPLACE, TRANSLATION_MODES.BILINGUAL].includes(mode)) {
       throw new Error(`Invalid translation mode: ${mode}`);
     }
 
@@ -203,8 +203,8 @@ async function handleModeSwitch(mode, tab) {
 
     await chrome.storage.sync.set({ translationMode: mode });
 
-    chrome.contextMenus.update('mode-replace', { checked: mode === 'replace' });
-    chrome.contextMenus.update('mode-bilingual', { checked: mode === 'paragraph-bilingual' });
+    chrome.contextMenus.update('mode-replace', { checked: mode === TRANSLATION_MODES.REPLACE });
+    chrome.contextMenus.update('mode-bilingual', { checked: mode === TRANSLATION_MODES.BILINGUAL });
 
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {

@@ -45,13 +45,7 @@ function initializeElements() {
   elements.testConnection = document.getElementById('testConnection');
   elements.testResult = document.getElementById('testResult');
   
-  // Translation Settings
-  elements.defaultSourceLang = document.getElementById('defaultSourceLang');
-  elements.defaultTargetLang = document.getElementById('defaultTargetLang');
-  elements.defaultModeReplace = document.getElementById('defaultModeReplace');
-  elements.defaultModeBilingual = document.getElementById('defaultModeBilingual');
-  elements.autoTranslateEnabled = document.getElementById('autoTranslateEnabled');
-  elements.preserveFormatting = document.getElementById('preserveFormatting');
+
   
   // Advanced Settings
   elements.excludeSelectors = document.getElementById('excludeSelectors');
@@ -88,18 +82,7 @@ async function loadSettings() {
     elements.maxTokens.value = translationConfig.maxTokens;
     elements.timeout.value = translationConfig.timeout / 1000;
 
-    // Translation Settings
-    elements.defaultSourceLang.value = config.sourceLanguage;
-    elements.defaultTargetLang.value = config.targetLanguage;
 
-    if (config.translationMode === TRANSLATION_MODES.REPLACE) {
-      elements.defaultModeReplace.checked = true;
-    } else {
-      elements.defaultModeBilingual.checked = true;
-    }
-
-    elements.autoTranslateEnabled.checked = config.autoTranslate;
-    elements.preserveFormatting.checked = config.preserveFormatting;
 
     // Advanced Settings
     const defaultSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT.join('\n');
@@ -450,11 +433,6 @@ async function saveSettings() {
   try {
     const settings = {
       translationConfig: collectApiConfig(),
-      sourceLanguage: elements.defaultSourceLang.value,
-      targetLanguage: elements.defaultTargetLang.value,
-      translationMode: elements.defaultModeReplace.checked ? TRANSLATION_MODES.REPLACE : TRANSLATION_MODES.BILINGUAL,
-      autoTranslate: elements.autoTranslateEnabled.checked,
-      preserveFormatting: elements.preserveFormatting.checked,
       excludeSelectors: extractUserSelectors(elements.excludeSelectors.value),
       batchSize: parseInt(elements.batchSize.value),
       retryAttempts: parseInt(elements.retryAttempts.value),

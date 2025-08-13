@@ -100,8 +100,8 @@ async function loadPreferences() {
       elements.targetLanguage.value = result.targetLanguage || 'zh-CN';
 
       // Set translation mode
-      const mode = result.translationMode || 'paragraph-bilingual';
-      if (mode === 'replace') {
+      const mode = result.translationMode || TRANSLATION_MODES.BILINGUAL;
+      if (mode === TRANSLATION_MODES.REPLACE) {
         elements.modeReplace.checked = true;
       } else {
         // 默认使用双语模式（包括段落级双语）
@@ -259,7 +259,8 @@ async function handleTranslate() {
       throw new Error('Translation not available on this page');
     }
 
-    const currentMode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
+    // 确保模式状态正确同步
+    const currentMode = elements.modeReplace.checked ? TRANSLATION_MODES.REPLACE : TRANSLATION_MODES.BILINGUAL;
 
     const response = await sendMessageWithTimeout(currentTab.id, {
       action: 'translate',
@@ -402,7 +403,7 @@ async function handleRestore() {
  * Handle translation mode change
  */
 async function handleModeChange() {
-  const mode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
+  const mode = elements.modeReplace.checked ? TRANSLATION_MODES.REPLACE : TRANSLATION_MODES.BILINGUAL;
 
   try {
     // 保存用户偏好
@@ -421,7 +422,7 @@ async function handleModeChange() {
 
         if (response && response.success) {
           // 更新状态显示
-          setStatus('translated', `Mode switched to ${mode === 'replace' ? 'Replace' : 'Bilingual'}`);
+          setStatus('translated', `Mode switched to ${mode === TRANSLATION_MODES.REPLACE ? 'Replace' : 'Bilingual'}`);
         } else {
           setStatus('error', 'Failed to switch mode');
         }
@@ -489,8 +490,8 @@ function updateButtonStates() {
 
   // Update restore button text based on mode
   if (isTranslated && !isTranslating) {
-    const mode = elements.modeReplace.checked ? 'replace' : 'paragraph-bilingual';
-    if (mode === 'paragraph-bilingual') {
+    const mode = elements.modeReplace.checked ? TRANSLATION_MODES.REPLACE : TRANSLATION_MODES.BILINGUAL;
+    if (mode === TRANSLATION_MODES.BILINGUAL) {
       elements.restoreBtn.textContent = 'Show Original Only';
     } else {
       elements.restoreBtn.textContent = 'Restore Original';

@@ -664,33 +664,26 @@ class TextExtractor {
       const group = paragraphGroups.get(paragraphId);
       group.textNodes.push(textNode);
 
-      // In replace mode, ensure we only use plain text content
-      const textContent = options.translationMode === 'replace'
-        ? this.stripHtmlFromText(textNode.text)
-        : textNode.text;
-
-      group.combinedText += (group.combinedText ? ' ' : '') + textContent;
+      // 统一使用原始文本内容，确保所有模式都能翻译相同的文本
+      group.combinedText += (group.combinedText ? ' ' : '') + textNode.text;
     });
 
-    // Extract HTML content for each group to preserve structure (only for bilingual mode)
-    // In replace mode, we should only use plain text to avoid HTML tags in translations
-    const shouldPreserveHtml = options.preserveHtml !== false && options.translationMode !== 'replace';
+    // 为双语模式提取HTML内容以保持结构
+    const shouldPreserveHtml = options.preserveHtml !== false && options.translationMode !== TRANSLATION_MODES.REPLACE;
 
     if (shouldPreserveHtml) {
       paragraphGroups.forEach(group => {
         group.htmlContent = this.extractHtmlContent(group.container);
 
-        // If the container has HTML content that differs significantly from plain text,
-        // use the HTML content for translation to preserve structure
+        // 如果容器有HTML内容且与纯文本差异显著，使用HTML内容进行翻译以保持结构
         if (group.htmlContent && this.shouldUseHtmlContent(group.container, group.combinedText)) {
           group.combinedText = this.extractTextFromHtml(group.htmlContent);
         }
       });
-    } else if (options.translationMode === TRANSLATION_MODES.REPLACE) {
-      // In replace mode, ensure all text is plain text without HTML tags
+    } else {
+      // 全局替换模式：保持原始文本内容用于翻译，但清除HTML内容标记
       paragraphGroups.forEach(group => {
-        group.combinedText = this.stripHtmlFromText(group.combinedText);
-        group.htmlContent = ''; // Clear HTML content to prevent any HTML processing
+        group.htmlContent = '';
       });
     }
 

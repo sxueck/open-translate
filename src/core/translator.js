@@ -224,16 +224,15 @@ class TranslationService {
       '11. Preserve the original tone and register (formal, informal, technical, casual)'
     ];
 
-    // Add HTML handling instructions only if text contains HTML AND we're not in replace mode
-    const shouldPreserveHtml = this.containsHtmlTags(options.text || text) && options.translationMode !== TRANSLATION_MODES.REPLACE;
-    if (shouldPreserveHtml) {
+    if (options.translationMode === TRANSLATION_MODES.REPLACE) {
+      baseInstructions.push('12. Return only plain text translation without any HTML tags, markup, or formatting');
+      baseInstructions.push('13. If the input contains HTML tags, extract and translate only the text content, ignoring all HTML markup');
+    } else if (this.containsHtmlTags(options.text || text)) {
       baseInstructions.push('12. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
       baseInstructions.push('13. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
       baseInstructions.push('14. Maintain the exact same HTML structure, nesting, and tag order in the translation');
       baseInstructions.push('15. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
       baseInstructions.push('16. Do not add, remove, or modify any HTML tags or attributes');
-    } else if (options.translationMode === 'replace') {
-      baseInstructions.push('12. Return only plain text translation without any HTML tags, markup, or formatting');
     }
 
     // Add context awareness section
@@ -596,7 +595,7 @@ ${sanitizedText}`;
   /**
    * Merge and translate short text segments in batches
    */
-  async batchMergeTranslate(textSegments, targetLanguage = 'zh-CN', sourceLanguage = 'auto') {
+  async batchMergeTranslate(textSegments, targetLanguage = 'zh-CN', sourceLanguage = 'auto', options = {}) {
     const mergeConfig = this.getMergeConfig();
     const { shortTexts, longTexts } = this.categorizeTextsByLength(textSegments, mergeConfig.shortTextThreshold);
 
@@ -621,7 +620,7 @@ ${sanitizedText}`;
 
     // Process short texts with merging
     if (shortTexts.length > 0) {
-      const mergedResults = await this.processMergedShortTexts(shortTexts, targetLanguage, sourceLanguage, mergeConfig);
+      const mergedResults = await this.processMergedShortTexts(shortTexts, targetLanguage, sourceLanguage, mergeConfig, options);
       results.push(...mergedResults);
     }
 
@@ -667,13 +666,13 @@ ${sanitizedText}`;
   /**
    * Process short texts with merging strategy
    */
-  async processMergedShortTexts(shortTexts, targetLanguage, sourceLanguage, mergeConfig) {
+  async processMergedShortTexts(shortTexts, targetLanguage, sourceLanguage, mergeConfig, options = {}) {
     const mergedBatches = this.createMergedBatches(shortTexts, mergeConfig);
     const results = [];
 
     for (const batch of mergedBatches) {
       try {
-        const mergedTranslation = await this.translateMergedBatch(batch, targetLanguage, sourceLanguage);
+        const mergedTranslation = await this.translateMergedBatch(batch, targetLanguage, sourceLanguage, options);
         const splitResults = this.splitMergedTranslation(batch, mergedTranslation);
         results.push(...splitResults);
       } catch (error) {
@@ -723,8 +722,8 @@ ${sanitizedText}`;
   /**
    * Translate a merged batch of short texts
    */
-  async translateMergedBatch(batch, targetLanguage, sourceLanguage) {
-    const mergedPrompt = this.buildMergedTranslationPrompt(batch, targetLanguage, sourceLanguage);
+  async translateMergedBatch(batch, targetLanguage, sourceLanguage, options = {}) {
+    const mergedPrompt = this.buildMergedTranslationPrompt(batch, targetLanguage, sourceLanguage, options);
     const response = await this.makeAPIRequest(mergedPrompt);
     return this.extractTranslation(response);
   }
@@ -732,7 +731,7 @@ ${sanitizedText}`;
   /**
    * Build prompt for merged translation
    */
-  buildMergedTranslationPrompt(batch, targetLang, sourceLang) {
+  buildMergedTranslationPrompt(batch, targetLang, sourceLang, options = {}) {
     const baseInstructions = [
       `You are a professional ${targetLang} native translator with excellent linguistic skills.`,
       '',
@@ -749,14 +748,21 @@ ${sanitizedText}`;
       '10. When translating to Chinese, always add a space between Chinese text and English words/numbers'
     ];
 
-    // Check if any text in the batch contains HTML
+    // 根据翻译模式处理HTML内容
     const hasHtml = batch.some(item => this.containsHtmlTags(item.text));
-    if (hasHtml) {
-      baseInstructions.push('9. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
-      baseInstructions.push('10. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
-      baseInstructions.push('11. Maintain the exact same HTML structure, nesting, and tag order in each translation');
-      baseInstructions.push('12. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
-      baseInstructions.push('13. Do not add, remove, or modify any HTML tags or attributes');
+    if (options.translationMode === TRANSLATION_MODES.REPLACE) {
+      if (hasHtml) {
+        baseInstructions.push('11. Some segments contain HTML tags. Extract and translate only the text content, ignoring all HTML markup');
+        baseInstructions.push('12. Return only plain text translations without any HTML tags, markup, or formatting');
+      } else {
+        baseInstructions.push('11. Return only plain text translations without any HTML tags, markup, or formatting');
+      }
+    } else if (hasHtml) {
+      baseInstructions.push('11. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
+      baseInstructions.push('12. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
+      baseInstructions.push('13. Maintain the exact same HTML structure, nesting, and tag order in each translation');
+      baseInstructions.push('14. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
+      baseInstructions.push('15. Do not add, remove, or modify any HTML tags or attributes');
     }
 
     const specificInstructions = this.getLanguageSpecificInstructions(targetLang);

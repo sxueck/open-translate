@@ -626,7 +626,7 @@ class TranslationRenderer {
         color: inherit;
         font-family: inherit;
         font-size: inherit;
-        font-weight: lighter;
+        font-weight: 350;
         font-style: inherit;
         line-height: 1.6;
         letter-spacing: 0.02em;

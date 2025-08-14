@@ -118,8 +118,6 @@ async function initializeInputFieldListener() {
 
     if (isEnabled) {
       inputFieldListener = new InputFieldListener({
-        spaceKeyCount: 3,
-        spaceKeyTimeout: 800,
         debounceDelay: 300,
         minTextLength: 2,
         maxTextLength: 5000,
@@ -196,6 +194,11 @@ async function handleMessage(message, sender, sendResponse) {
       case 'toggleInputFieldListener':
         await handleToggleInputFieldListener(message.enabled);
         sendResponse({ success: true, enabled: inputFieldListener?.isEnabled || false });
+        break;
+
+      case 'updateInputFieldSettings':
+        await handleUpdateInputFieldSettings(message.settings);
+        sendResponse({ success: true });
         break;
 
       default:
@@ -546,6 +549,25 @@ async function handleToggleInputFieldListener(enabled) {
     }
 
     notifyStatusChange('inputFieldListenerToggled', { enabled });
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * 处理输入框设置更新请求
+ */
+async function handleUpdateInputFieldSettings(settings) {
+  try {
+    // 保存设置到存储
+    await chrome.storage.sync.set(settings);
+
+    // 更新输入框监听器设置
+    if (inputFieldListener) {
+      await inputFieldListener.updateSettings(settings);
+    }
+
+    notifyStatusChange('inputFieldSettingsUpdated', settings);
   } catch (error) {
     throw error;
   }

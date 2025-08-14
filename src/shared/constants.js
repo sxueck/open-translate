@@ -17,7 +17,13 @@ const STORAGE_KEYS = {
   RETRY_ATTEMPTS: 'retryAttempts',
 
   SMART_CONTENT_ENABLED: 'smartContentEnabled',
-  INPUT_FIELD_LISTENER_ENABLED: 'inputFieldListenerEnabled'
+  INPUT_FIELD_LISTENER_ENABLED: 'inputFieldListenerEnabled',
+  INPUT_FIELD_TRIGGER_KEY: 'inputFieldTriggerKey',
+  INPUT_FIELD_CTRL_KEY: 'inputFieldCtrlKey',
+  INPUT_FIELD_ALT_KEY: 'inputFieldAltKey',
+  INPUT_FIELD_SHIFT_KEY: 'inputFieldShiftKey',
+  AUTO_DETECT_PAGE_LANGUAGE: 'autoDetectPageLanguage',
+  DEFAULT_TARGET_LANGUAGE: 'defaultTargetLanguage'
 };
 
 // Language mappings
@@ -205,7 +211,8 @@ const MESSAGE_ACTIONS = {
   TEXT_SELECTED: 'textSelected',
   GET_TAB_STATUS: 'getTabStatus',
   UPDATE_CONFIG: 'updateConfig',
-  TOGGLE_INPUT_FIELD_LISTENER: 'toggleInputFieldListener'
+  TOGGLE_INPUT_FIELD_LISTENER: 'toggleInputFieldListener',
+  UPDATE_INPUT_FIELD_SETTINGS: 'updateInputFieldSettings'
 };
 
 // Translation status

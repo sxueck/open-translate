@@ -50,6 +50,12 @@ function initializeElements() {
   // Advanced Settings
   elements.smartContentEnabled = document.getElementById('smartContentEnabled');
   elements.inputFieldListenerEnabled = document.getElementById('inputFieldListenerEnabled');
+  elements.inputFieldTriggerKey = document.getElementById('inputFieldTriggerKey');
+  elements.inputFieldCtrlKey = document.getElementById('inputFieldCtrlKey');
+  elements.inputFieldAltKey = document.getElementById('inputFieldAltKey');
+  elements.inputFieldShiftKey = document.getElementById('inputFieldShiftKey');
+  elements.autoDetectPageLanguage = document.getElementById('autoDetectPageLanguage');
+  elements.defaultTargetLanguage = document.getElementById('defaultTargetLanguage');
   elements.excludeSelectors = document.getElementById('excludeSelectors');
   elements.batchSize = document.getElementById('batchSize');
   elements.retryAttempts = document.getElementById('retryAttempts');
@@ -89,6 +95,14 @@ async function loadSettings() {
     // Advanced Settings
     elements.smartContentEnabled.checked = config.smartContentEnabled !== false; // Default to true
     elements.inputFieldListenerEnabled.checked = config.inputFieldListenerEnabled !== false; // Default to true
+
+    // Input Field Settings
+    elements.inputFieldTriggerKey.value = config.inputFieldTriggerKey || 'F2';
+    elements.inputFieldCtrlKey.checked = config.inputFieldCtrlKey || false;
+    elements.inputFieldAltKey.checked = config.inputFieldAltKey || false;
+    elements.inputFieldShiftKey.checked = config.inputFieldShiftKey || false;
+    elements.autoDetectPageLanguage.checked = config.autoDetectPageLanguage !== false; // Default to true
+    elements.defaultTargetLanguage.value = config.defaultTargetLanguage || 'en';
 
     const defaultSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT.join('\n');
     const userSelectors = config.excludeSelectors || '';
@@ -440,6 +454,12 @@ async function saveSettings() {
       translationConfig: collectApiConfig(),
       smartContentEnabled: elements.smartContentEnabled.checked,
       inputFieldListenerEnabled: elements.inputFieldListenerEnabled.checked,
+      inputFieldTriggerKey: elements.inputFieldTriggerKey.value,
+      inputFieldCtrlKey: elements.inputFieldCtrlKey.checked,
+      inputFieldAltKey: elements.inputFieldAltKey.checked,
+      inputFieldShiftKey: elements.inputFieldShiftKey.checked,
+      autoDetectPageLanguage: elements.autoDetectPageLanguage.checked,
+      defaultTargetLanguage: elements.defaultTargetLanguage.value,
       excludeSelectors: extractUserSelectors(elements.excludeSelectors.value),
       batchSize: parseInt(elements.batchSize.value),
       retryAttempts: parseInt(elements.retryAttempts.value),

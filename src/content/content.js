@@ -52,7 +52,8 @@ async function loadUserPreferences() {
       'maxMergedLength',
       'maxMergedCount',
       'excludeSelectors',
-      'preserveFormatting'
+      'preserveFormatting',
+      'smartContentEnabled'
     ], (result) => {
       // 保持与初始默认值一致：如果用户没有设置，使用 REPLACE 模式
       translationMode = result.translationMode || TRANSLATION_MODES.REPLACE;
@@ -66,7 +67,8 @@ async function loadUserPreferences() {
       // Initialize TextExtractor with user configuration
       textExtractor = new TextExtractor({
         excludeSelectors: result.excludeSelectors || '',
-        preserveFormatting: result.preserveFormatting !== false
+        preserveFormatting: result.preserveFormatting !== false,
+        smartContentEnabled: result.smartContentEnabled !== false
       });
 
       // Update translation service with configuration if available

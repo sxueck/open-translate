@@ -48,6 +48,7 @@ function initializeElements() {
 
   
   // Advanced Settings
+  elements.smartContentEnabled = document.getElementById('smartContentEnabled');
   elements.excludeSelectors = document.getElementById('excludeSelectors');
   elements.batchSize = document.getElementById('batchSize');
   elements.retryAttempts = document.getElementById('retryAttempts');
@@ -85,6 +86,8 @@ async function loadSettings() {
 
 
     // Advanced Settings
+    elements.smartContentEnabled.checked = config.smartContentEnabled !== false; // Default to true
+
     const defaultSelectors = DOM_SELECTORS.EXCLUDE_DEFAULT.join('\n');
     const userSelectors = config.excludeSelectors || '';
 
@@ -433,6 +436,7 @@ async function saveSettings() {
   try {
     const settings = {
       translationConfig: collectApiConfig(),
+      smartContentEnabled: elements.smartContentEnabled.checked,
       excludeSelectors: extractUserSelectors(elements.excludeSelectors.value),
       batchSize: parseInt(elements.batchSize.value),
       retryAttempts: parseInt(elements.retryAttempts.value),

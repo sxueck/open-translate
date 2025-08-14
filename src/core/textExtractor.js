@@ -40,12 +40,44 @@ class TextExtractor {
       PARAGRAPH: 'paragraph',     // Group by paragraphs for batch processing
       STRUCTURED: 'structured'    // Preserve document structure
     };
+
+    // Initialize smart content extractor
+    this.smartContentExtractor = new SmartContentExtractor({
+      enabled: options.smartContentEnabled !== false,
+      fallbackExtractor: this,
+      charThreshold: options.charThreshold || 300,
+      classesToPreserve: options.classesToPreserve || []
+    });
   }
 
   /**
    * Unified extraction method with different modes
    */
   extract(mode = this.extractionModes.SIMPLE, rootElement = document.body, options = {}) {
+    // Try smart content extraction first if enabled
+    if (this.smartContentExtractor.enabled && options.useSmartExtraction !== false) {
+      try {
+        const smartResult = this.smartContentExtractor.extractMainContent(rootElement, {
+          mode: mode,
+          ...options
+        });
+
+        if (smartResult && this.isValidExtractionResult(smartResult)) {
+          return smartResult;
+        }
+      } catch (error) {
+        console.warn('Smart content extraction failed, using fallback:', error);
+      }
+    }
+
+    // Fallback to original extraction logic
+    return this.performTraditionalExtraction(mode, rootElement, options);
+  }
+
+  /**
+   * Perform traditional extraction (original logic)
+   */
+  performTraditionalExtraction(mode, rootElement, options) {
     // Generate content-based cache key for better hit rate
     const contentHash = this.generateContentHash(rootElement, mode, options);
     const cacheKey = `${mode}-${contentHash}`;
@@ -76,6 +108,25 @@ class TextExtractor {
     // Cache result for performance
     this.cacheResult(cacheKey, result);
     return result;
+  }
+
+  /**
+   * Validate extraction result
+   */
+  isValidExtractionResult(result) {
+    if (!result) return false;
+
+    if (Array.isArray(result)) {
+      return result.length > 0 && result.some(item =>
+        item.text && item.text.trim().length > 0
+      );
+    }
+
+    if (result.textNodes) {
+      return result.textNodes.length > 0;
+    }
+
+    return result.text && result.text.trim().length > 0;
   }
 
   /**
@@ -139,205 +190,23 @@ class TextExtractor {
    * Extract text nodes grouped by paragraphs
    */
   extractParagraphGroups(rootElement = document.body, options = {}) {
-    // 优先从主要内容区域提取文本
-    const mainContentElement = this.findMainContentArea(rootElement);
-    const extractionRoot = mainContentElement || rootElement;
-
-    const textNodes = this.extractTextNodes(extractionRoot, options);
+    const textNodes = this.extractTextNodes(rootElement, options);
     return this.groupTextNodesByParagraph(textNodes, options);
   }
 
-  /**
-   * 查找主要内容区域
-   */
-  findMainContentArea(rootElement = document.body) {
-    // 按优先级查找主要内容区域
-    for (const selector of DOM_SELECTORS.MAIN_CONTENT_SELECTORS) {
-      const element = rootElement.querySelector(selector);
-      if (element && this.hasSignificantContent(element)) {
-        return element;
-      }
-    }
-
-    // 如果没有找到明确的主要内容区域，尝试启发式方法
-    return this.findMainContentByHeuristics(rootElement);
-  }
-
-  /**
-   * 使用启发式方法查找主要内容区域
-   */
-  findMainContentByHeuristics(rootElement) {
-    const candidates = [];
-
-    // 查找包含大量文本的容器
-    const containers = rootElement.querySelectorAll('div, section, article');
-
-    containers.forEach(container => {
-      // 跳过明显的非内容区域
-      if (this.isInNonContentArea(container)) {
-        return;
-      }
-
-      // 预计算所有需要的元素信息，避免重复查询
-      const elementInfo = this.analyzeElementContent(container);
-
-      // 计算内容密度分数
-      const score = this.calculateContentScoreOptimized(elementInfo);
-
-      if (score > 0) {
-        candidates.push({
-          element: container,
-          score,
-          textLength: elementInfo.textLength,
-          info: elementInfo
-        });
-      }
-    });
-
-    // 按分数排序，返回最佳候选
-    candidates.sort((a, b) => b.score - a.score);
-
-    if (candidates.length > 0) {
-      return candidates[0].element;
-    }
-
-    return null;
-  }
-
-  /**
-   * 分析元素内容，一次性获取所有需要的信息
-   */
-  analyzeElementContent(element) {
-    const textContent = element.textContent.trim();
-    const textLength = textContent.length;
-
-    // 使用单次查询获取所有子元素信息
-    const allChildren = Array.from(element.children);
-    const childElements = allChildren.length;
-
-    // 分类统计不同类型的元素
-    const elementCounts = {
-      paragraphs: 0,
-      headings: 0,
-      links: 0,
-      buttons: 0,
-      images: 0,
-      lists: 0
-    };
-
-    // 使用 TreeWalker 高效遍历所有后代元素
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_ELEMENT,
-      null,
-      false
-    );
-
-    let node;
-    while (node = walker.nextNode()) {
-      const tagName = node.tagName.toLowerCase();
-
-      switch (tagName) {
-        case 'p':
-          elementCounts.paragraphs++;
-          break;
-        case 'h1':
-        case 'h2':
-        case 'h3':
-        case 'h4':
-        case 'h5':
-        case 'h6':
-          elementCounts.headings++;
-          break;
-        case 'a':
-          elementCounts.links++;
-          break;
-        case 'button':
-          elementCounts.buttons++;
-          break;
-        case 'input':
-          if (node.type === 'button' || node.type === 'submit') {
-            elementCounts.buttons++;
-          }
-          break;
-        case 'img':
-          elementCounts.images++;
-          break;
-        case 'ul':
-        case 'ol':
-          elementCounts.lists++;
-          break;
-      }
-    }
-
-    return {
-      textLength,
-      childElements,
-      textContent,
-      ...elementCounts
-    };
-  }
 
 
 
-  /**
-   * 优化后的内容分数计算方法
-   */
-  calculateContentScoreOptimized(elementInfo) {
-    let score = 0;
-    const { textLength, paragraphs, headings, links, buttons, images, lists } = elementInfo;
 
-    // 文本长度权重 - 使用更精细的分级
-    if (textLength > 1000) score += 5;
-    else if (textLength > 500) score += 3;
-    else if (textLength > 200) score += 2;
-    else if (textLength > 50) score += 1;
 
-    // 段落和标题权重
-    const totalParagraphs = paragraphs + headings;
-    if (totalParagraphs > 10) score += 3;
-    else if (totalParagraphs > 5) score += 2;
-    else if (totalParagraphs > 2) score += 1;
 
-    // 标题额外加分
-    if (headings > 0) score += Math.min(headings, 3);
 
-    // 列表内容加分
-    if (lists > 0) score += Math.min(lists * 0.5, 2);
 
-    // 图片适量加分
-    if (images > 0 && images <= 5) score += 1;
 
-    // 减分项：链接密度过高
-    const linkDensity = textLength > 0 ? links / (textLength / 100) : 0;
-    if (linkDensity > 1) score -= Math.min(linkDensity, 3);
 
-    // 减分项：按钮过多
-    if (buttons > 5) score -= Math.min(buttons - 5, 2);
 
-    // 减分项：图片过多可能是广告区域
-    if (images > 10) score -= 2;
 
-    return Math.max(score, 0); // 确保分数不为负
-  }
 
-  /**
-   * 计算内容区域分数（保持向后兼容）
-   */
-  calculateContentScore(element, textLength, childElements) {
-    // 使用优化后的方法
-    const elementInfo = this.analyzeElementContent(element);
-    return this.calculateContentScoreOptimized(elementInfo);
-  }
-
-  /**
-   * 检查元素是否包含有意义的内容
-   */
-  hasSignificantContent(element) {
-    const textContent = element.textContent.trim();
-    return textContent.length > 100 &&
-           element.querySelectorAll('p, h1, h2, h3, h4, h5, h6').length > 0;
-  }
 
   /**
    * Create tree walker
@@ -414,7 +283,7 @@ class TextExtractor {
     }
 
     // 检查是否在非内容区域（侧边栏、导航栏等）
-    if (this.isInNonContentArea(node.parentElement)) {
+    if (isExcludedElement(node.parentElement, [])) {
       return false;
     }
 
@@ -481,13 +350,7 @@ class TextExtractor {
     return false;
   }
 
-  /**
-   * 检查节点是否在非内容区域
-   */
-  isInNonContentArea(element) {
-    // 统一使用 constants.js 中的排除选择器配置
-    return isExcludedElement(element, []);
-  }
+
 
 
 
@@ -598,6 +461,34 @@ class TextExtractor {
   clearCache() {
     this.invalidateCache();
     this.cacheStats = { hits: 0, misses: 0 };
+    if (this.smartContentExtractor) {
+      this.smartContentExtractor.clearCache();
+    }
+  }
+
+  /**
+   * Enable/disable smart content extraction
+   */
+  setSmartContentEnabled(enabled) {
+    if (this.smartContentExtractor) {
+      this.smartContentExtractor.setEnabled(enabled);
+    }
+  }
+
+  /**
+   * Check if smart content extraction is enabled
+   */
+  isSmartContentEnabled() {
+    return this.smartContentExtractor && this.smartContentExtractor.enabled;
+  }
+
+  /**
+   * Check if document is suitable for smart extraction
+   */
+  isProbablyReaderable(document, options = {}) {
+    return this.smartContentExtractor ?
+      this.smartContentExtractor.isProbablyReaderable(document, options) :
+      false;
   }
 
   /**

@@ -18,10 +18,10 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        
+        cache: 'npm'
+
     - name: Install dependencies
-      run: |
-        echo "No dependencies to install - project uses vanilla JavaScript"
+      run: npm ci
         
     - name: Run build validation
       run: npm run build
@@ -93,7 +93,12 @@ jobs:
         cp manifest.json test-package/
         cp -r src test-package/
         cp -r assets test-package/
-        
+
+        # Copy required node_modules dependencies
+        mkdir -p test-package/node_modules/@mozilla/readability
+        cp node_modules/@mozilla/readability/Readability.js test-package/node_modules/@mozilla/readability/
+        cp node_modules/@mozilla/readability/Readability-readerable.js test-package/node_modules/@mozilla/readability/
+
         echo "Test package created successfully"
         
     - name: Upload test artifacts

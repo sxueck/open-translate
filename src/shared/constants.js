@@ -14,7 +14,9 @@ const STORAGE_KEYS = {
   PRESERVE_FORMATTING: 'preserveFormatting',
   EXCLUDE_SELECTORS: 'excludeSelectors',
   BATCH_SIZE: 'batchSize',
-  RETRY_ATTEMPTS: 'retryAttempts'
+  RETRY_ATTEMPTS: 'retryAttempts',
+
+  SMART_CONTENT_ENABLED: 'smartContentEnabled'
 };
 
 // Language mappings
@@ -65,7 +67,8 @@ const PERFORMANCE = {
   CACHE_SIZE: 100,                  // Maximum cache entries
   CACHE_TIMEOUT: 30000,             // Cache timeout in milliseconds (30 seconds)
   DOCUMENT_ORDER_CACHE_SIZE: 100,   // Document order cache size
-  CONTENT_ANALYSIS_TIMEOUT: 5000    // Content analysis timeout
+  READABILITY_CACHE_SIZE: 50,       // Smart content extractor cache size
+  READABILITY_CACHE_TIMEOUT: 30000  // Smart content extractor cache timeout
 };
 
 // Text processing constants
@@ -146,31 +149,6 @@ const DOM_SELECTORS = {
     'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'article', 'section', 'header', 'footer', 'main',
     'aside', 'nav', 'blockquote', 'pre', 'li', 'td', 'th'
-  ],
-  // 主要内容区域选择器（优先翻译这些区域）
-  MAIN_CONTENT_SELECTORS: [
-    'main',
-    'article',
-    '.content',
-    '.main-content',
-    '.post-content',
-    '.entry-content',
-    '.article-content',
-    '.page-content',
-    '.blog-content',
-    '.text-content',
-    '.body-content',
-    '.story-content',
-    '.news-content',
-    '#content',
-    '#main',
-    '#main-content',
-    '#post-content',
-    '#article-content',
-    '.container .content',
-    '.wrapper .content',
-    '[role="main"]',
-    '[role="article"]'
   ],
   BILINGUAL_CONTAINER: '.ot-bilingual-container',
   BILINGUAL_ORIGINAL: '.ot-original',

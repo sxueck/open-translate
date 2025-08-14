@@ -17,10 +17,10 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        
+        cache: 'npm'
+
     - name: Install dependencies
-      run: |
-        echo "No dependencies to install - project uses vanilla JavaScript"
+      run: npm ci
         
     - name: Run build validation
       run: npm run build
@@ -50,16 +50,21 @@ jobs:
       run: |
         # Create a clean directory for packaging
         mkdir -p dist/extension
-        
+
         # Copy all necessary files
         cp manifest.json dist/extension/
         cp -r src dist/extension/
         cp -r assets dist/extension/
-        
+
+        # Copy required node_modules dependencies
+        mkdir -p dist/extension/node_modules/@mozilla/readability
+        cp node_modules/@mozilla/readability/Readability.js dist/extension/node_modules/@mozilla/readability/
+        cp node_modules/@mozilla/readability/Readability-readerable.js dist/extension/node_modules/@mozilla/readability/
+
         # Remove any development files
         find dist/extension -name "*.md" -delete
         find dist/extension -name ".DS_Store" -delete
-        
+
         echo "Extension package created in dist/extension"
         
     - name: Install Chrome for CRX packaging

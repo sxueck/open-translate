@@ -105,6 +105,14 @@
         <h2 class="section-title">Advanced Settings</h2>
         <div class="section-content">
           <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="smartContentEnabled" class="form-checkbox">
+              Enable intelligent content recognition
+            </label>
+            <small class="form-help">The Mozilla Readability algorithm is used to automatically identify the main content area of web pages, reducing the need for manual configuration. It is enabled by default. When disabled, the traditional element identification method will be used.</small>
+          </div>
+
+          <div class="form-group">
             <label for="excludeSelectors" class="form-label">Exclude Selectors</label>
             <textarea id="excludeSelectors" class="form-textarea" rows="12" placeholder="Loading exclude selectors..."></textarea>
             <small class="form-help">This shows all exclude selectors. Default exclusions are built-in and shown at the top. Add your custom selectors after the "# User Additional Selectors:" comment line.</small>
@@ -134,7 +142,7 @@
         </div>
       </div>
       <div class="footer-info">
-        <p>Open Translate v1.0.0 - A powerful web translation extension</p>
+        <p>Open Translate v1.0.3 - A powerful web translation extension</p>
       </div>
     </footer>
 

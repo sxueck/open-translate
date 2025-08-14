@@ -1,4 +1,8 @@
-# 基于内容密度的网页翻译优先级算法原理
+# 基于内容密度的网页翻译优先级算法原理 - 已废弃
+
+为了对页面主要的内容进行优先翻译以加强响应速度，我们提出了一种基于内容密度的网页翻译优先级算法，当前还非常粗糙，后续观察会逐步优化。
+
+> 当前直接使用了 Molilla Readability 算法，该算法已经经过了广泛验证，不需要额外的算法来辅助
 
 ## 算法概述
 
@@ -23,7 +27,7 @@
 
 ### 优化后的内容密度分数计算
 
-内容密度分数 $S(e)$ 通过优化后的多维度评估公式计算：
+内容密度分数 $S(e)$ 通过优化后的评估公式计算：
 
 $$S(e) = W_{\text{text}} \cdot f_{\text{text}}(|T(e)|) + W_{\text{para}} \cdot f_{\text{para}}(|P(e)|) + W_{\text{head}} \cdot f_{\text{head}}(|H(e)|) + W_{\text{list}} \cdot f_{\text{list}}(|L_i(e)|) + W_{\text{img}} \cdot f_{\text{img}}(|I(e)|) - W_{\text{link}} \cdot f_{\text{link}}(|L(e)|, |T(e)|) - W_{\text{btn}} \cdot f_{\text{btn}}(|B(e)|)$$
 

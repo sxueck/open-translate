@@ -55,6 +55,28 @@ srcDirs.forEach(dir => {
   }
 });
 
+// Copy required npm dependencies
+console.log('\nCopying npm dependencies...');
+const nodeModulesDir = path.join(packageDir, 'node_modules', '@mozilla', 'readability');
+fs.mkdirSync(nodeModulesDir, { recursive: true });
+
+const readabilityFiles = [
+  'node_modules/@mozilla/readability/Readability.js',
+  'node_modules/@mozilla/readability/Readability-readerable.js'
+];
+
+readabilityFiles.forEach(file => {
+  if (fs.existsSync(file)) {
+    const fileName = path.basename(file);
+    fs.copyFileSync(file, path.join(nodeModulesDir, fileName));
+    console.log(`✓ ${file}`);
+  } else {
+    console.error(`✗ ${file} - MISSING`);
+    console.error('Run "npm install" to install dependencies');
+    process.exit(1);
+  }
+});
+
 // Generate PNG icons if needed
 console.log('\nProcessing icons...');
 try {

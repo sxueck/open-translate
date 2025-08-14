@@ -13,6 +13,7 @@ const requiredFiles = [
   'manifest.json',
   'src/core/translator.js',
   'src/core/textExtractor.js',
+  'src/core/smartContentExtractor.js',
   'src/core/translationRenderer.js',
   'src/content/content.js',
   'src/content/content.css',
@@ -23,6 +24,12 @@ const requiredFiles = [
   'src/options/options.html',
   'src/options/options.css',
   'src/options/options.js'
+];
+
+// Check for npm dependencies
+const requiredDependencies = [
+  'node_modules/@mozilla/readability/Readability.js',
+  'node_modules/@mozilla/readability/Readability-readerable.js'
 ];
 
 console.log('Validating required files...');
@@ -37,8 +44,19 @@ requiredFiles.forEach(file => {
   }
 });
 
+console.log('\nChecking npm dependencies...');
+requiredDependencies.forEach(file => {
+  if (fs.existsSync(file)) {
+    console.log(`✓ ${file}`);
+  } else {
+    console.log(`✗ ${file} - MISSING`);
+    console.log('  Run "npm install" to install dependencies');
+    allFilesExist = false;
+  }
+});
+
 if (!allFilesExist) {
-  console.log('\nBuild failed: Missing required files');
+  console.log('\nBuild failed: Missing required files or dependencies');
   process.exit(1);
 }
 

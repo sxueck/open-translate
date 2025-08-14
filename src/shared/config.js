@@ -26,7 +26,8 @@ class ConfigManager {
       enableMerge: true,
       shortTextThreshold: 50,
       maxMergedLength: 1000,
-      maxMergedCount: 10
+      maxMergedCount: 10,
+      smartContentEnabled: true
     };
 
     this.storageKeys = [
@@ -42,7 +43,8 @@ class ConfigManager {
       'enableMerge',
       'shortTextThreshold',
       'maxMergedLength',
-      'maxMergedCount'
+      'maxMergedCount',
+      'smartContentEnabled'
     ];
   }
 

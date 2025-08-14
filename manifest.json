@@ -20,11 +20,14 @@
     {
       "matches": ["<all_urls>"],
       "js": [
+        "node_modules/@mozilla/readability/Readability.js",
+        "node_modules/@mozilla/readability/Readability-readerable.js",
         "src/shared/constants.js",
         "src/shared/utils.js",
         "src/shared/config.js",
         "src/shared/errorHandler.js",
         "src/shared/stateManager.js",
+        "src/core/smartContentExtractor.js",
         "src/core/textExtractor.js",
         "src/core/translationRenderer.js",
         "src/core/translator.js",

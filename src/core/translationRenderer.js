@@ -177,7 +177,7 @@ class TranslationRenderer {
     }
 
     // 跳过非内容区域的文本
-    if (this.isInNonContentArea(parent)) {
+    if (isExcludedElement(parent, [])) {
       return;
     }
 
@@ -433,7 +433,7 @@ class TranslationRenderer {
     }
 
     // 跳过非内容区域的容器
-    if (this.isInNonContentArea(container)) {
+    if (isExcludedElement(container, [])) {
       return;
     }
 
@@ -880,12 +880,7 @@ class TranslationRenderer {
     return false;
   }
 
-  /**
-   * 检查元素是否在非内容区域
-   */
-  isInNonContentArea(element) {
-    return isExcludedElement(element, []);
-  }
+
 
   /**
    * Detect site styles for better integration

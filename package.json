@@ -1,15 +1,17 @@
 {
   "name": "open-translate",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "A powerful Chrome browser extension for web page translation with OpenAI API compatibility",
   "main": "src/background/background.js",
   "scripts": {
+    "prebuild": "npm install",
     "build": "node scripts/build.js",
     "generate-icons": "node scripts/generate-icons.js",
     "generate-store-assets": "node scripts/generate-store-assets.js",
     "generate-all-assets": "npm run generate-icons && npm run generate-store-assets",
     "validate": "node scripts/build.js",
     "dev": "echo 'Load the extension in Chrome developer mode from this directory'",
+    "prepackage": "npm run build",
     "package": "node scripts/package.js",
     "package:zip": "node scripts/package.js --format=zip",
     "package:crx": "node scripts/package.js --format=crx"
@@ -55,5 +57,8 @@
       "http://*/*",
       "https://*/*"
     ]
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0"
   }
 }

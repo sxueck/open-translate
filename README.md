@@ -4,8 +4,11 @@ A powerful Chrome browser extension for web page translation with OpenAI API com
 
 ## ScreenShot
 
-<img width="680" height="912" alt="image" src="https://github.com/user-attachments/assets/09668d37-1e33-4b19-9f35-fc32a1aa558d" />
-<img width="1404" height="418" alt="image" src="https://github.com/user-attachments/assets/de53f2ba-0d1c-4d40-99d0-bd20ffe7f05d" />
+Use Gemini-2.5-Flash Model
+
+<img width="1592" height="229" alt="57ecc1e15822972779e0f205545fdecf" src="https://github.com/user-attachments/assets/ca3dbc68-2ea0-4637-b32f-73c7242f1fe3" />
+<img width="1571" height="405" alt="28aa3b19b1d489b14a8044d148ccfb3b" src="https://github.com/user-attachments/assets/f3beaa2a-0b22-4a83-8f89-6b84e5862600" />
+
 
 ## Features
 

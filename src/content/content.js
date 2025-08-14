@@ -7,6 +7,7 @@
 let textExtractor = null;
 const translationRenderer = new TranslationRenderer();
 let translationService = null;
+let inputFieldListener = null;
 
 // State management
 let isTranslating = false;
@@ -26,6 +27,9 @@ async function initialize() {
     await loadUserPreferences();
     setupMessageListeners();
     setupContextMenu();
+
+    // 初始化输入框监听器
+    await initializeInputFieldListener();
   } catch (error) {
 
     // Use errorHandler if available
@@ -53,7 +57,8 @@ async function loadUserPreferences() {
       'maxMergedCount',
       'excludeSelectors',
       'preserveFormatting',
-      'smartContentEnabled'
+      'smartContentEnabled',
+      'inputFieldListenerEnabled'
     ], (result) => {
       // 保持与初始默认值一致：如果用户没有设置，使用 REPLACE 模式
       translationMode = result.translationMode || TRANSLATION_MODES.REPLACE;
@@ -93,6 +98,44 @@ async function loadUserPreferences() {
       resolve();
     });
   });
+}
+
+/**
+ * 初始化输入框监听器
+ */
+async function initializeInputFieldListener() {
+  try {
+    if (!translationService) {
+      return;
+    }
+
+    // 检查用户是否启用了输入框监听功能
+    const result = await new Promise((resolve) => {
+      chrome.storage.sync.get(['inputFieldListenerEnabled'], resolve);
+    });
+
+    const isEnabled = result.inputFieldListenerEnabled !== false; // 默认启用
+
+    if (isEnabled) {
+      inputFieldListener = new InputFieldListener({
+        spaceKeyCount: 3,
+        spaceKeyTimeout: 800,
+        debounceDelay: 300,
+        minTextLength: 2,
+        maxTextLength: 5000,
+        enableAnimation: true
+      });
+
+      await inputFieldListener.initialize(translationService);
+    }
+  } catch (error) {
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'input-field-listener-initialization', {
+        logToConsole: true,
+        suppressNotification: true
+      });
+    }
+  }
 }
 
 /**
@@ -145,9 +188,16 @@ async function handleMessage(message, sender, sendResponse) {
         await translationService.updateConfig(message.config);
         // Reinitialize TextExtractor with updated configuration
         await loadUserPreferences();
+        // 重新初始化输入框监听器
+        await initializeInputFieldListener();
         sendResponse({ success: true });
         break;
-        
+
+      case 'toggleInputFieldListener':
+        await handleToggleInputFieldListener(message.enabled);
+        sendResponse({ success: true, enabled: inputFieldListener?.isEnabled || false });
+        break;
+
       default:
         sendResponse({ success: false, error: 'Unknown action' });
     }
@@ -474,6 +524,34 @@ async function handleSwitchModeRequest(newMode) {
 }
 
 /**
+ * 处理输入框监听器开关请求
+ */
+async function handleToggleInputFieldListener(enabled) {
+  try {
+    // 保存用户偏好
+    await chrome.storage.sync.set({ inputFieldListenerEnabled: enabled });
+
+    if (enabled) {
+      // 启用输入框监听器
+      if (!inputFieldListener) {
+        await initializeInputFieldListener();
+      } else {
+        inputFieldListener.enable();
+      }
+    } else {
+      // 禁用输入框监听器
+      if (inputFieldListener) {
+        inputFieldListener.disable();
+      }
+    }
+
+    notifyStatusChange('inputFieldListenerToggled', { enabled });
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
  * Set up context menu interactions and link click handling
  */
 function setupContextMenu() {
@@ -574,6 +652,11 @@ function cleanup() {
   // Clear timeouts
   if (window.otContentChangeTimeout) {
     clearTimeout(window.otContentChangeTimeout);
+  }
+
+  // 清理输入框监听器
+  if (inputFieldListener) {
+    inputFieldListener.cleanup();
   }
 
   // Reset state

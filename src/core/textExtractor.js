@@ -559,23 +559,26 @@ class TextExtractor {
       group.combinedText += (group.combinedText ? ' ' : '') + textNode.text;
     });
 
-    // 为双语模式提取HTML内容以保持结构
-    const shouldPreserveHtml = options.preserveHtml !== false && options.translationMode !== TRANSLATION_MODES.REPLACE;
-
-    if (shouldPreserveHtml) {
-      paragraphGroups.forEach(group => {
-        group.htmlContent = this.extractHtmlContent(group.container);
-
-        // 如果容器有HTML内容且与纯文本差异显著，使用HTML内容进行翻译以保持结构
-        if (group.htmlContent && this.shouldUseHtmlContent(group.container, group.combinedText)) {
-          group.combinedText = this.extractTextFromHtml(group.htmlContent);
-        }
-      });
-    } else {
-      // 全局替换模式：保持原始文本内容用于翻译，但清除HTML内容标记
+    if (options.translationMode === TRANSLATION_MODES.REPLACE) {
       paragraphGroups.forEach(group => {
         group.htmlContent = '';
       });
+    } else {
+      const shouldPreserveHtml = options.preserveHtml !== false;
+
+      if (shouldPreserveHtml) {
+        paragraphGroups.forEach(group => {
+          group.htmlContent = this.extractHtmlContent(group.container);
+
+          if (group.htmlContent && this.shouldUseHtmlContent(group.container, group.combinedText, options.translationMode)) {
+            group.combinedText = this.extractTextFromHtml(group.htmlContent);
+          }
+        });
+      } else {
+        paragraphGroups.forEach(group => {
+          group.htmlContent = '';
+        });
+      }
     }
 
     // Convert to array and handle large groups
@@ -675,7 +678,7 @@ class TextExtractor {
     const clone = container.cloneNode(true);
 
     // Remove any existing translation elements
-    const existingTranslations = clone.querySelectorAll('.ot-paragraph-translated, .ot-bilingual-container');
+    const existingTranslations = clone.querySelectorAll('.ot-paragraph-translated, .ot-bilingual-container, .ot-paragraph-bilingual');
     existingTranslations.forEach(el => el.remove());
 
     // Get the inner HTML which preserves the structure
@@ -699,8 +702,12 @@ class TextExtractor {
   /**
    * Check if we should use HTML content instead of plain text for translation
    */
-  shouldUseHtmlContent(container, plainText) {
+  shouldUseHtmlContent(container, plainText, translationMode = null) {
     if (!container || !plainText) return false;
+
+    if (translationMode === TRANSLATION_MODES.REPLACE) {
+      return false;
+    }
 
     // Check if container has significant HTML structure
     const htmlElements = container.querySelectorAll('a, code, span, strong, em, b, i, u, mark, sup, sub, small, big, tt, kbd, samp, var');
@@ -710,7 +717,6 @@ class TextExtractor {
     let hasSignificantHtmlText = false;
     htmlElements.forEach(el => {
       const text = el.textContent.trim();
-      // 只考虑影响显示的属性，排除title等非显示属性
       if ((text.length > 0 && hasSignificantText(text)) ||
           el.hasAttribute('href') ||
           el.classList.length > 0) {

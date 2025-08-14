@@ -323,3 +323,103 @@ article .ot-bilingual-container,
   line-height: 1.4 !important;
   margin-top: 0 !important;
 }
+
+/* Input Field Translation Styles */
+.ot-input-translation-loading,
+.ot-input-translation-result {
+  position: fixed !important;
+  z-index: 2147483647 !important;
+  background: #ffffff !important;
+  border: 1px solid #ddd !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15) !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  color: #333 !important;
+  max-width: 300px !important;
+  word-wrap: break-word !important;
+  pointer-events: auto !important;
+}
+
+.ot-input-translation-loading {
+  padding: 8px 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.ot-input-translation-result {
+  padding: 12px !important;
+}
+
+.ot-loading-spinner {
+  width: 12px !important;
+  height: 12px !important;
+  border: 2px solid #f3f3f3 !important;
+  border-top: 2px solid #007bff !important;
+  border-radius: 50% !important;
+  animation: ot-spin 1s linear infinite !important;
+  flex-shrink: 0 !important;
+}
+
+@keyframes ot-spin {
+  0% { transform: rotate(0deg) !important; }
+  100% { transform: rotate(360deg) !important; }
+}
+
+.ot-loading-text {
+  color: #666 !important;
+  font-size: 12px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.ot-translation-actions {
+  margin-top: 8px !important;
+  display: flex !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.ot-translation-btn {
+  padding: 4px 8px !important;
+  border: 1px solid #ddd !important;
+  background: #f8f9fa !important;
+  border-radius: 3px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  color: #666 !important;
+  font-family: inherit !important;
+  line-height: 1.2 !important;
+  text-decoration: none !important;
+  display: inline-block !important;
+  transition: background-color 0.2s ease !important;
+  margin: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.ot-translation-btn:hover {
+  background: #e9ecef !important;
+  border-color: #ccc !important;
+}
+
+.ot-translation-btn:active {
+  background: #dee2e6 !important;
+  transform: translateY(1px) !important;
+}
+
+.ot-input-translation-result > div:first-child {
+  font-weight: bold !important;
+  margin-bottom: 4px !important;
+  color: #333 !important;
+  font-size: 12px !important;
+}
+
+.ot-input-translation-result > div:nth-child(2) {
+  color: #555 !important;
+  margin-bottom: 8px !important;
+  word-break: break-word !important;
+}

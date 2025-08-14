@@ -14,6 +14,7 @@ const elements = {
   translateBtn: null,
   restoreBtn: null,
   autoTranslate: null,
+  inputFieldListener: null,
 
   optionsBtn: null,
   loadingOverlay: null
@@ -71,6 +72,7 @@ function initializeElements() {
   elements.translateBtn = document.getElementById('translateBtn');
   elements.restoreBtn = document.getElementById('restoreBtn');
   elements.autoTranslate = document.getElementById('autoTranslate');
+  elements.inputFieldListener = document.getElementById('inputFieldListener');
 
   elements.optionsBtn = document.getElementById('optionsBtn');
   elements.loadingOverlay = document.getElementById('loadingOverlay');
@@ -93,7 +95,8 @@ async function loadPreferences() {
       'sourceLanguage',
       'targetLanguage',
       'translationMode',
-      'autoTranslate'
+      'autoTranslate',
+      'inputFieldListenerEnabled'
     ], (result) => {
       // Set language selections
       elements.sourceLanguage.value = result.sourceLanguage || 'auto';
@@ -109,6 +112,7 @@ async function loadPreferences() {
 
       // Set checkboxes
       elements.autoTranslate.checked = result.autoTranslate || false;
+      elements.inputFieldListener.checked = result.inputFieldListenerEnabled !== false; // Default to true
 
       resolve();
     });
@@ -133,6 +137,7 @@ function setupEventListeners() {
 
   // Settings checkboxes
   elements.autoTranslate.addEventListener('change', saveGeneralPreferences);
+  elements.inputFieldListener.addEventListener('change', handleInputFieldListenerToggle);
 
   // Navigation buttons
   elements.optionsBtn.addEventListener('click', () => {
@@ -451,6 +456,35 @@ async function saveGeneralPreferences() {
   await chrome.storage.sync.set({
     autoTranslate: elements.autoTranslate.checked
   });
+}
+
+/**
+ * Handle input field listener toggle
+ */
+async function handleInputFieldListenerToggle() {
+  try {
+    const enabled = elements.inputFieldListener.checked;
+
+    // Save preference
+    await chrome.storage.sync.set({
+      inputFieldListenerEnabled: enabled
+    });
+
+    // Send message to content script to toggle the listener
+    if (currentTab) {
+      await chrome.tabs.sendMessage(currentTab.id, {
+        action: 'toggleInputFieldListener',
+        enabled: enabled
+      });
+    }
+  } catch (error) {
+    if (typeof errorHandler !== 'undefined') {
+      errorHandler.handle(error, 'popup-input-field-listener-toggle', {
+        logToConsole: true,
+        suppressNotification: true
+      });
+    }
+  }
 }
 
 /**

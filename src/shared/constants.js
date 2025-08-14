@@ -16,7 +16,8 @@ const STORAGE_KEYS = {
   BATCH_SIZE: 'batchSize',
   RETRY_ATTEMPTS: 'retryAttempts',
 
-  SMART_CONTENT_ENABLED: 'smartContentEnabled'
+  SMART_CONTENT_ENABLED: 'smartContentEnabled',
+  INPUT_FIELD_LISTENER_ENABLED: 'inputFieldListenerEnabled'
 };
 
 // Language mappings
@@ -203,7 +204,8 @@ const MESSAGE_ACTIONS = {
   STATUS_UPDATE: 'statusUpdate',
   TEXT_SELECTED: 'textSelected',
   GET_TAB_STATUS: 'getTabStatus',
-  UPDATE_CONFIG: 'updateConfig'
+  UPDATE_CONFIG: 'updateConfig',
+  TOGGLE_INPUT_FIELD_LISTENER: 'toggleInputFieldListener'
 };
 
 // Translation status

@@ -206,20 +206,22 @@ class TranslationService {
    */
   buildSystemPrompt(targetLang, options = {}) {
     const baseInstructions = [
-      `You are a professional ${targetLang} native translator who needs to fluently translate text into ${targetLang}.`,
+      `You are a professional ${targetLang} native translator with excellent language skills and cultural understanding.`,
       '',
-      '## Translation Rules',
-      '1. Output only the translated content, without explanations or additional content (such as "Here\'s the translation:" or "Translation as follows:")',
-      '2. The returned translation must maintain exactly the same number of paragraphs and format as the original text',
-      '3. If the text contains HTML tags, consider where the tags should be placed in the translation while maintaining fluency',
-      '4. For content that should not be translated (such as proper nouns, code, etc.), keep the original text',
-      '5. Output translation directly (no separators, no extra text)',
-      '6. Maintain the original meaning, tone, and context accurately',
-      '7. Use natural, fluent language that sounds native to the target language',
-      '8. Preserve technical terms, proper nouns, and brand names when appropriate',
-      '9. For ambiguous terms, choose the most contextually appropriate translation',
+      '## Translation Principles',
+      '1. PRIORITY: Create natural, fluent translations that sound like they were originally written in ${targetLang}',
+      '2. Avoid literal word-for-word translations - prioritize natural expression over strict structural adherence',
+      '3. Use idiomatic expressions and natural sentence patterns of the target language',
+      '4. Adapt cultural references and concepts to be understandable in the target culture',
+      '5. Maintain the original meaning and intent, but express it in the most natural way possible',
+      '',
+      '## Output Requirements',
+      '6. Output only the translated content, without explanations or additional content',
+      '7. Maintain the same number of paragraphs and overall structure as the original',
+      '8. For technical terms, proper nouns, and brand names, keep them unchanged when appropriate',
+      '9. Choose the most contextually appropriate translation for ambiguous terms',
       '10. Maintain consistency in terminology throughout the text',
-      '11. Preserve the original tone and style (formal, informal, technical, casual)'
+      '11. Preserve the original tone and register (formal, informal, technical, casual)'
     ];
 
     // Add HTML handling instructions only if text contains HTML AND we're not in replace mode
@@ -252,9 +254,41 @@ class TranslationService {
    * Build user prompt (actual translation request)
    */
   buildUserPrompt(text, targetLang) {
+    // 对用户输入的文本进行基本的安全检查
+    const sanitizedText = this.sanitizeTranslationText(text);
+
     return `Translate to ${targetLang} (output translation only):
 
-${text}`;
+${sanitizedText}`;
+  }
+
+  /**
+   * 清理翻译文本，防止提示注入但保持翻译内容完整性
+   */
+  sanitizeTranslationText(text) {
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
+
+    // 对于翻译文本，我们需要更保守的清理，主要防止明显的提示注入
+    // 但要保持文本内容的完整性
+    let sanitized = text;
+
+    // 检测并标记可能的提示注入尝试
+    const suspiciousPatterns = [
+      /^\s*(ignore|forget|system|assistant|user)\s*:/i,
+      /^\s*##\s*(new|different|alternative)\s+(instruction|prompt|rule)/i,
+      /^\s*\d+\.\s*(ignore|forget|instead|now)/i
+    ];
+
+    const hasSuspiciousContent = suspiciousPatterns.some(pattern => pattern.test(sanitized));
+
+    if (hasSuspiciousContent) {
+      // 如果检测到可疑内容，在文本前添加明确的分隔符
+      sanitized = `[TEXT TO TRANSLATE]\n${sanitized}\n[END OF TEXT]`;
+    }
+
+    return sanitized;
   }
 
   /**
@@ -264,13 +298,70 @@ ${text}`;
     const contextInstructions = [];
 
     if (options.title) {
+      // 清理标题内容，防止提示注入攻击
+      const sanitizedTitle = this.sanitizePromptInput(options.title);
       contextInstructions.push('');
       contextInstructions.push('## Context Awareness');
       contextInstructions.push('Document Metadata:');
-      contextInstructions.push(`Title: 《${options.title}》`);
+      contextInstructions.push(`Title: 《${sanitizedTitle}》`);
     }
 
     return contextInstructions;
+  }
+
+  /**
+   * 清理提示输入，防止提示注入攻击
+   */
+  sanitizePromptInput(input) {
+    if (!input || typeof input !== 'string') {
+      return '';
+    }
+
+    // 移除可能的提示注入模式
+    return input
+      // 移除多行指令分隔符
+      .replace(/\n\s*##\s*/g, ' ')
+      .replace(/\n\s*\d+\.\s*/g, ' ')
+      // 移除角色定义尝试
+      .replace(/\b(you are|act as|pretend to be|ignore previous|forget|system|assistant|user):/gi, '')
+      // 移除指令关键词
+      .replace(/\b(translate|output|return|respond|answer|ignore|forget|system|prompt)\s*:/gi, '')
+      // 限制长度，防止过长的注入尝试
+      .substring(0, 200)
+      // 移除多余空格
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * 验证提示内容的安全性
+   */
+  validatePromptSecurity(content, type) {
+    if (!content || typeof content !== 'string') {
+      return;
+    }
+
+    // 检测高风险的提示注入模式
+    const highRiskPatterns = [
+      // 角色重定义尝试
+      /\b(you are now|from now on|ignore previous|forget everything|new instructions?)\b/gi,
+      // 系统提示覆盖尝试
+      /\b(system\s*:|assistant\s*:|user\s*:)\s*(ignore|forget|override)/gi,
+      // 输出格式劫持尝试
+      /\b(instead of translating|don't translate|output|return|respond with)\s*:/gi
+    ];
+
+    const hasHighRiskContent = highRiskPatterns.some(pattern => pattern.test(content));
+
+    if (hasHighRiskContent) {
+      console.warn(`[Security] Potential prompt injection detected in ${type} prompt`);
+      // 在生产环境中，可以考虑记录到安全日志或采取其他措施
+    }
+
+    // 检查提示长度，防止过长的注入尝试
+    if (content.length > 50000) {
+      throw new Error('Prompt content too long, potential security risk');
+    }
   }
 
   /**
@@ -281,20 +372,24 @@ ${text}`;
 
     if (targetLang.includes('Chinese')) {
       instructions.push('');
-      instructions.push('Chinese-specific requirements:');
-      instructions.push('- Use appropriate Chinese expressions and idioms when suitable');
-      instructions.push('- Maintain formal/informal tone based on context');
-      instructions.push('- Ensure smooth sentence flow and natural grammar structure');
+      instructions.push('## Chinese Translation Excellence Guidelines:');
+      instructions.push('- CRITICAL: Prioritize natural Chinese expression over literal translation');
+      instructions.push('- Use authentic Chinese sentence patterns and word order');
+      instructions.push('- Apply appropriate Chinese idioms, expressions, and colloquialisms when they fit naturally');
+      instructions.push('- Ensure smooth, readable flow that sounds like native Chinese writing');
       instructions.push('- Use proper Chinese punctuation and formatting conventions');
       instructions.push('- Always add a space between Chinese characters and English words, numbers, or technical terms');
-      instructions.push('- Avoid awkward literal translations; prioritize natural Chinese expression');
-      instructions.push('- Use appropriate measure words and sentence connectors for better readability');
+      instructions.push('- Choose the most natural Chinese equivalent rather than direct word substitution');
+      instructions.push('- Use appropriate measure words, connectors, and sentence structures for clarity');
+      instructions.push('- Adapt sentence length and complexity to match Chinese reading habits');
 
       if (targetLang === 'Simplified Chinese') {
-        instructions.push('- Use simplified Chinese characters and mainland China conventions');
-        instructions.push('- Prefer commonly used modern Chinese expressions');
+        instructions.push('- Use simplified Chinese characters and mainland China linguistic conventions');
+        instructions.push('- Prefer contemporary, widely-used Chinese expressions');
+        instructions.push('- Follow mainland Chinese usage patterns and terminology preferences');
       } else {
         instructions.push('- Use traditional Chinese characters and Taiwan/Hong Kong conventions');
+        instructions.push('- Follow traditional Chinese linguistic patterns and terminology');
       }
     }
 
@@ -387,6 +482,10 @@ ${text}`;
       // 系统消息和用户消息分离，以加强 LLM 的注意力
       let messages;
       if (options.systemPrompt && options.userPrompt) {
+        // 验证提示内容的安全性
+        this.validatePromptSecurity(options.systemPrompt, 'system');
+        this.validatePromptSecurity(options.userPrompt, 'user');
+
         messages = [
           {
             role: 'system',
@@ -398,6 +497,9 @@ ${text}`;
           }
         ];
       } else {
+        // 验证组合提示的安全性
+        this.validatePromptSecurity(prompt, 'combined');
+
         messages = [
           {
             role: 'user',
@@ -632,17 +734,19 @@ ${text}`;
    */
   buildMergedTranslationPrompt(batch, targetLang, sourceLang) {
     const baseInstructions = [
-      `You are a professional translator. Translate the following numbered text segments from ${sourceLang} to ${targetLang}.`,
+      `You are a professional ${targetLang} native translator with excellent linguistic skills.`,
       '',
-      'Requirements:',
-      '1. Maintain the original meaning, tone, and context accurately for each segment',
-      '2. Use natural, fluent language that sounds native to the target language',
-      '3. Preserve technical terms, proper nouns, and brand names when appropriate',
-      '4. Return translations in the same numbered format as the input',
-      '5. Each translation should be on a separate line with its corresponding number',
-      '6. Only return the numbered translations without any additional text or commentary',
-      '7. Ensure proper grammar, sentence flow, and natural expression in the target language',
-      '8. When translating to Chinese, always add a space between Chinese text and English words/numbers'
+      'Translation Excellence Requirements:',
+      '1. PRIORITY: Create natural, fluent translations that sound like native ${targetLang} writing',
+      '2. Avoid literal word-for-word translations - use natural ${targetLang} expressions',
+      '3. Maintain the original meaning and intent while adapting to ${targetLang} linguistic patterns',
+      '4. Use idiomatic expressions and natural sentence structures of ${targetLang}',
+      '5. Preserve technical terms, proper nouns, and brand names when appropriate',
+      '6. Return translations in the same numbered format as the input',
+      '7. Each translation should be on a separate line with its corresponding number',
+      '8. Only return the numbered translations without any additional text or commentary',
+      '9. Ensure excellent readability and natural flow in ${targetLang}',
+      '10. When translating to Chinese, always add a space between Chinese text and English words/numbers'
     ];
 
     // Check if any text in the batch contains HTML
@@ -982,18 +1086,22 @@ Translations:`;
    */
   buildMultipleSystemPrompt(targetLang, options = {}) {
     const baseInstructions = [
-      `You are a professional ${targetLang} native translator who needs to fluently translate text into ${targetLang}.`,
+      `You are a professional ${targetLang} native translator with exceptional linguistic skills and cultural understanding.`,
       '',
-      '## Translation Rules',
-      '1. Output only the translated content, without explanations or additional content (such as "Here\'s the translation:" or "Translation as follows:")',
-      '2. The returned translation must maintain exactly the same number of paragraphs and format as the original text',
-      '3. If the text contains HTML tags, consider where the tags should be placed in the translation while maintaining fluency',
-      '4. For content that should not be translated (such as proper nouns, code, etc.), keep the original text',
-      '5. Return translations in the same numbered format as the input',
-      '6. Each translation should be on a separate line with its corresponding number',
-      '7. Only return the numbered translations without any additional text or commentary',
-      '8. Maintain consistency in terminology across all segments',
-      '9. Preserve the original tone and style for each segment'
+      '## Translation Excellence Principles',
+      '1. PRIORITY: Create natural, fluent translations that read like native ${targetLang} content',
+      '2. Avoid literal translations - use natural ${targetLang} expressions and sentence patterns',
+      '3. Adapt content to ${targetLang} linguistic and cultural conventions',
+      '4. Use idiomatic expressions and natural word order of ${targetLang}',
+      '5. Maintain the original meaning and intent while optimizing for ${targetLang} readability',
+      '',
+      '## Output Requirements',
+      '6. Output only the translated content, without explanations or additional text',
+      '7. Return translations in the same numbered format as the input',
+      '8. Each translation should be on a separate line with its corresponding number',
+      '9. Only return the numbered translations without any additional commentary',
+      '10. Maintain consistency in terminology across all segments',
+      '11. Ensure excellent flow and natural expression in ${targetLang}'
     ];
 
     // Add context awareness section

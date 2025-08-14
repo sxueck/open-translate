@@ -54,7 +54,8 @@ async function loadUserPreferences() {
       'excludeSelectors',
       'preserveFormatting'
     ], (result) => {
-      translationMode = result.translationMode || TRANSLATION_MODES.BILINGUAL;
+      // 保持与初始默认值一致：如果用户没有设置，使用 REPLACE 模式
+      translationMode = result.translationMode || TRANSLATION_MODES.REPLACE;
       translationRenderer.setMode(translationMode);
 
       // 如果是Replace模式，确保清理任何可能的双语模式残留

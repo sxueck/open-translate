@@ -8,6 +8,8 @@ class TranslationRenderer {
     this.translatedElements = new Set();
     this.styleInjected = false;
 
+    this.renderedResults = new Set();
+
     // Performance optimizations
     this.maxCacheSize = 1000;
     this.cleanupInterval = 300000; // 5 minutes
@@ -54,8 +56,12 @@ class TranslationRenderer {
       return;
     }
 
+    const resultId = this.generateResultId(result);
+    if (this.renderedResults.has(resultId)) {
+      return;
+    }
+
     try {
-      // 优先使用传入的模式，否则使用当前设置的模式
       const actualMode = mode !== null ? mode : this.translationMode;
 
       // 确保模式有效，默认使用替换模式以保持向后兼容
@@ -75,15 +81,48 @@ class TranslationRenderer {
         this.createParagraphBilingualDisplay(result);
       }
 
+      this.renderedResults.add(resultId);
+
     } catch (error) {
     }
+  }
+
+  /**
+   * 生成翻译结果的唯一标识符
+   */
+  generateResultId(result) {
+    if (!result.container) return null;
+
+    // 使用容器元素和原文内容生成唯一ID
+    const containerId = result.container.tagName +
+                       (result.container.id || '') +
+                       (result.container.className || '');
+    const textHash = this.simpleHash(result.originalText || '');
+    return `${containerId}-${textHash}`;
+  }
+
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
   }
   /**
    * Ensure bilingual styles are injected
    */
   ensureBilingualStyles() {
-    if (!this.styleInjected || !document.getElementById(CSS_CLASSES.STYLE_ID)) {
+    const styleId = CSS_CLASSES.STYLE_ID;
+    const existingStyle = document.getElementById(styleId);
+
+    // 只有在样式不存在时才注入
+    if (!existingStyle) {
       this.injectBilingualStyles();
+      this.styleInjected = true;
+    } else if (!this.styleInjected) {
+      // 如果样式存在但标记为未注入，更新标记
       this.styleInjected = true;
     }
   }
@@ -97,6 +136,11 @@ class TranslationRenderer {
 
     // Special handling for option elements in replace mode
     if (parent && parent.tagName && parent.tagName.toLowerCase() === 'option') {
+      // Skip if already processed
+      if (this.translatedElements.has(parent)) {
+        return;
+      }
+
       // Store original text for restoration
       if (!this.originalTexts.has(parent)) {
         this.originalTexts.set(parent, parent.textContent);
@@ -538,7 +582,11 @@ class TranslationRenderer {
    */
   injectBilingualStyles() {
     const styleId = CSS_CLASSES.STYLE_ID;
-    if (document.getElementById(styleId)) return;
+
+    // 双重检查，确保不会重复注入
+    if (document.getElementById(styleId)) {
+      return;
+    }
 
     const style = document.createElement('style');
     style.id = styleId;
@@ -570,29 +618,25 @@ class TranslationRenderer {
         color: inherit;
       }
 
-      /* 译文样式 - 简化设计 */
+      /* 译文样式 */
       .ot-paragraph-translated {
-        margin-top: 4px;
-        padding: 0;
+        margin-top: 10px;
+        margin-bottom: 8px;
+        padding: 4px 0;
         color: inherit;
         font-family: inherit;
         font-size: inherit;
-        font-weight: inherit;
+        font-weight: lighter;
         font-style: inherit;
-        line-height: inherit;
-        letter-spacing: inherit;
+        line-height: 1.6;
+        letter-spacing: 0.02em;
         text-decoration: inherit;
         background: none;
         border: none;
         border-radius: 0;
-        transition: none;
+        transition: opacity 0.2s ease;
         position: relative;
       }
-
-
-
-
-
 
 
       /* 仅显示原文模式 */
@@ -660,6 +704,7 @@ class TranslationRenderer {
     // Clear tracking data
     this.originalTexts.clear();
     this.translatedElements.clear();
+    this.renderedResults.clear(); // 清理渲染状态跟踪
   }
 
   showOriginalOnly() {
@@ -748,6 +793,7 @@ class TranslationRenderer {
     // 彻底清理所有翻译相关的DOM元素
     this.cleanupAllBilingualElements();
     this.translatedElements.clear();
+    this.renderedResults.clear(); // 清理渲染状态跟踪
 
     // 设置新模式
     this.setMode(newMode);
@@ -944,14 +990,80 @@ class TranslationRenderer {
    * 生成对比度调整样式
    */
   generateContrastAdjustments(siteStyles) {
-    return '';
+    const isDarkMode = this.isDarkMode(siteStyles);
+
+    return `
+      /* 译文透明度和对比度调整 */
+      .ot-paragraph-translated {
+        opacity: 0.85;
+        ${isDarkMode ? 'filter: brightness(0.9);' : 'filter: brightness(1.1);'}
+      }
+
+      /* 鼠标悬停时提高可读性 */
+      .ot-paragraph-bilingual:hover .ot-paragraph-translated {
+        opacity: 1;
+        filter: none;
+      }
+    `;
+  }
+
+  /**
+   * 检测是否为深色模式
+   */
+  isDarkMode(siteStyles) {
+    const bgColor = siteStyles.backgroundColor;
+    if (!bgColor || bgColor === 'transparent' || bgColor === 'rgba(0, 0, 0, 0)') {
+      return false;
+    }
+
+    // 简单的深色检测逻辑
+    const rgb = bgColor.match(/\d+/g);
+    if (rgb && rgb.length >= 3) {
+      const brightness = (parseInt(rgb[0]) * 299 + parseInt(rgb[1]) * 587 + parseInt(rgb[2]) * 114) / 1000;
+      return brightness < 128;
+    }
+
+    return false;
   }
 
   /**
    * 生成间距调整样式
    */
   generateSpacingAdjustments(siteStyles) {
-    return '';
+    const fontSize = parseFloat(siteStyles.fontSize) || 16;
+    const topSpacing = Math.max(8, fontSize * 0.5);
+    const bottomSpacing = Math.max(6, fontSize * 0.375);
+    const padding = Math.max(4, fontSize * 0.25);
+
+    return `
+      /* 根据字体大小动态调整间距 */
+      .ot-paragraph-translated {
+        margin-top: ${topSpacing}px !important;
+        margin-bottom: ${bottomSpacing}px !important;
+        padding: ${padding}px 0 !important;
+        line-height: ${Math.max(1.5, 1.2 + fontSize * 0.025)} !important;
+      }
+
+      /* 针对小字体的特殊处理 */
+      ${fontSize < 14 ? `
+        .ot-paragraph-translated {
+          margin-top: 6px !important;
+          margin-bottom: 4px !important;
+          padding: 3px 0 !important;
+          line-height: 1.5 !important;
+        }
+      ` : ''}
+
+      /* 针对大字体的特殊处理 */
+      ${fontSize > 18 ? `
+        .ot-paragraph-translated {
+          margin-top: ${fontSize * 0.6}px !important;
+          margin-bottom: ${fontSize * 0.45}px !important;
+          padding: ${fontSize * 0.3}px 0 !important;
+          line-height: 1.7 !important;
+        }
+      ` : ''}
+    `;
   }
 
   /**

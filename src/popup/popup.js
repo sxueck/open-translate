@@ -99,12 +99,11 @@ async function loadPreferences() {
       elements.sourceLanguage.value = result.sourceLanguage || 'auto';
       elements.targetLanguage.value = result.targetLanguage || 'zh-CN';
 
-      // Set translation mode
-      const mode = result.translationMode || TRANSLATION_MODES.BILINGUAL;
+      // Set translation mode - 统一默认为替换模式
+      const mode = result.translationMode || TRANSLATION_MODES.REPLACE;
       if (mode === TRANSLATION_MODES.REPLACE) {
         elements.modeReplace.checked = true;
       } else {
-        // 默认使用双语模式（包括段落级双语）
         elements.modeBilingual.checked = true;
       }
 

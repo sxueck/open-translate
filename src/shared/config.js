@@ -15,7 +15,7 @@ class ConfigManager {
         maxTokens: 2000,
         timeout: 30000
       },
-      translationMode: TRANSLATION_MODES.BILINGUAL,
+      translationMode: TRANSLATION_MODES.REPLACE,
       targetLanguage: 'zh-CN',
       sourceLanguage: 'auto',
       autoTranslate: false,
@@ -173,10 +173,10 @@ class ConfigManager {
       validated.sourceLanguage = 'auto';
     }
 
-    // Validate translation mode
+    // Validate translation mode - 统一默认为替换模式
     const validModes = [TRANSLATION_MODES.REPLACE, TRANSLATION_MODES.BILINGUAL];
     if (validated.translationMode && !validModes.includes(validated.translationMode)) {
-      validated.translationMode = TRANSLATION_MODES.BILINGUAL;
+      validated.translationMode = TRANSLATION_MODES.REPLACE;
     }
 
     return validated;

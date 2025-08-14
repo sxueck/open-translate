@@ -20,7 +20,7 @@ class StateManager {
       
       // Global settings
       settings: {
-        translationMode: 'paragraph-bilingual',
+        translationMode: 'replace', // 统一默认为替换模式
         targetLanguage: 'zh-CN',
         sourceLanguage: 'auto',
         autoTranslate: false

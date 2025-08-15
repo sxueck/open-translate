@@ -180,16 +180,16 @@ const REGEX_PATTERNS = {
   EMAIL: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 };
 
-// Error messages
+// Error messages (using i18n keys)
 const ERROR_MESSAGES = {
-  API_KEY_MISSING: 'API key not configured',
-  TRANSLATION_FAILED: 'Translation failed',
-  NO_TRANSLATABLE_TEXT: 'No translatable text found on this page',
-  NETWORK_ERROR: 'Network error occurred',
-  TIMEOUT_ERROR: 'Request timeout',
-  INVALID_RESPONSE: 'Invalid API response',
-  QUOTA_EXCEEDED: 'API quota exceeded',
-  RATE_LIMITED: 'Rate limit exceeded'
+  API_KEY_MISSING: 'error_api_key_missing',
+  TRANSLATION_FAILED: 'error_translation_failed',
+  NO_TRANSLATABLE_TEXT: 'error_no_translatable_text',
+  NETWORK_ERROR: 'error_network_error',
+  TIMEOUT_ERROR: 'error_timeout_error',
+  INVALID_RESPONSE: 'error_invalid_response',
+  QUOTA_EXCEEDED: 'error_quota_exceeded',
+  RATE_LIMITED: 'error_rate_limited'
 };
 
 // Context menu IDs

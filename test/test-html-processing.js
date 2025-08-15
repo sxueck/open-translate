@@ -12,18 +12,7 @@ const REGEX_PATTERNS = {
   CHINESE_CHARS: /[\u4e00-\u9fff\u3400-\u4dbf]/
 };
 
-function hasSignificantText(text) {
-  if (!text || typeof text !== 'string') return false;
-  
-  const trimmed = text.trim();
-  if (trimmed.length < TEXT_PROCESSING.MIN_TEXT_LENGTH) return false;
-  
-  if (REGEX_PATTERNS.PURE_NUMBERS_SYMBOLS.test(trimmed)) return false;
-  
-  if (trimmed.length === TEXT_PROCESSING.MIN_SIGNIFICANT_LENGTH && !REGEX_PATTERNS.CHINESE_CHARS.test(trimmed)) return false;
-  
-  return true;
-}
+// hasSignificantText function is now available from shared/utils.js
 
 // Test HTML processing functions
 function testHtmlProcessing() {

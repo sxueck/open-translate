@@ -1,8 +1,14 @@
 # Open Translate
 
+[中文](README_zh.md) | [English](README.md)
+
+<img src="assets/icons/icon48.png" alt="Open Translate Icon" width="48" height="48">
+
 A powerful Chrome browser extension for web page translation with OpenAI API compatibility.
 
-## ScreenShot
+> You can read the world, and let the world listen to you
+
+## Screenshots
 
 Use Gemini-2.5-Flash Model
 
@@ -14,7 +20,7 @@ Use Gemini-2.5-Flash Model
 
 ### Core Translation Capabilities
 - **Full Page Translation**: Translate entire web pages while preserving layout and styling
-- **OpenAI API Compatible**: Works with any OpenAI-compatible translation service
+- **OpenAI API Compatible**: Works with any OpenAI-compatible translation service (LLM translation services only)
 - **Advanced Model Management**:
   - Fetch available models from API endpoints
   - Support for custom model names
@@ -41,6 +47,8 @@ Use Gemini-2.5-Flash Model
 - **Performance Optimized**: Minimal impact on page loading and browsing
 
 ## Installation
+
+Currently under review in the Chrome Store. If you want to experience the latest features, you can download the latest version directly from Release and load it through developer mode.
 
 ### Development Installation
 
@@ -72,9 +80,9 @@ Use Gemini-2.5-Flash Model
    - **API Key**: Enter your API key (stored securely)
    - **Model Selection**: Choose from predefined models or fetch from API
    - **Custom Model**: Enter custom model name (overrides dropdown selection)
-   - **Temperature**: Adjust translation creativity (0.0-1.0)
-   - **Max Tokens**: Set maximum response length
-   - **Timeout**: Configure request timeout
+   - **Temperature**: Adjust translation creativity (optional)
+   - **Max Tokens**: Set maximum response length (optional)
+   - **Timeout**: Configure request timeout (optional)
 
 3. **Test Connection**:
    - Click "Test Connection" to verify your API configuration
@@ -98,8 +106,26 @@ Use Gemini-2.5-Flash Model
 4. **Choose translation mode** (Replace or Bilingual)
 5. **Click "Translate Page"** to start translation
 
+### Input Field Translation (Experimental Feature)
+
+- **Press F2 key** (or configured shortcut) in any text input field
+- **Enter text to translate**
+- **Translation results will appear in a popup near the input field**
+
 ### Context Menu
 
 - **Right-click on any page** and select "Translate this page"
 - **Select text** and right-click to translate selection
 - **Access mode switching** from the context menu
+
+## Compatible API Services
+
+This extension works with any OpenAI-compatible API service:
+- OpenAI GPT models
+- Anthropic Claude
+- Google Gemini
+- Other OpenAI-compatible LLM services
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details

@@ -1,0 +1,432 @@
+{
+  "extensionName": {
+    "message": "Open Translate",
+    "description": "Name of the extension"
+  },
+  "extensionDescription": {
+    "message": "A web page translation extension compatible with OpenAI API",
+    "description": "Extension description"
+  },
+
+  "popup_title": {
+    "message": "Open Translate",
+    "description": "Title in popup"
+  },
+  "popup_ready_to_translate": {
+    "message": "Ready to translate",
+    "description": "Ready status text"
+  },
+  "popup_translating": {
+    "message": "Translating...",
+    "description": "Translation in progress status text"
+  },
+  "popup_translated": {
+    "message": "Page translated successfully",
+    "description": "Translation success status text"
+  },
+  "popup_error": {
+    "message": "Translation failed",
+    "description": "Translation failure status text"
+  },
+
+  "popup_source_language": {
+    "message": "Source Language:",
+    "description": "Source language selection label"
+  },
+  "popup_target_language": {
+    "message": "Target Language:",
+    "description": "Target language selection label"
+  },
+  "popup_translation_mode": {
+    "message": "Translation Mode:",
+    "description": "Translation mode selection label"
+  },
+  "popup_mode_replace": {
+    "message": "Replace",
+    "description": "Replace mode option"
+  },
+  "popup_mode_bilingual": {
+    "message": "Paragraph Bilingual",
+    "description": "Bilingual mode option"
+  },
+
+  "popup_translate_page": {
+    "message": "Translate Page",
+    "description": "Translate button text"
+  },
+  "popup_restore_original": {
+    "message": "Restore Original",
+    "description": "Restore button text"
+  },
+  "popup_auto_translate": {
+    "message": "Auto-translate new pages",
+    "description": "Auto translate checkbox label"
+  },
+  "popup_input_field_translation": {
+    "message": "Input field translation",
+    "description": "Input field translation checkbox label"
+  },
+  "popup_advanced_settings": {
+    "message": "Advanced Settings",
+    "description": "Advanced settings button text"
+  },
+
+  "options_title": {
+    "message": "Open Translate Settings",
+    "description": "Options page title"
+  },
+  "options_subtitle": {
+    "message": "Configure your translation preferences and API settings",
+    "description": "Options page subtitle"
+  },
+
+  "options_api_configuration": {
+    "message": "API Configuration",
+    "description": "API configuration section title"
+  },
+  "options_api_endpoint": {
+    "message": "API Endpoint URL",
+    "description": "API endpoint label"
+  },
+  "options_api_endpoint_placeholder": {
+    "message": "https://api.openai.com/v1/chat/completions",
+    "description": "API endpoint placeholder"
+  },
+  "options_api_endpoint_help": {
+    "message": "Enter the OpenAI-compatible API endpoint URL",
+    "description": "API endpoint help text"
+  },
+  "options_api_key": {
+    "message": "API Key",
+    "description": "API key label"
+  },
+  "options_api_key_placeholder": {
+    "message": "Enter your API key",
+    "description": "API key placeholder"
+  },
+  "options_api_key_help": {
+    "message": "Your API key will be stored securely in the browser's local storage",
+    "description": "API key help text"
+  },
+  "options_model": {
+    "message": "Model",
+    "description": "Model selection label"
+  },
+  "options_custom_model": {
+    "message": "Custom Model",
+    "description": "Custom model label"
+  },
+  "options_custom_model_placeholder": {
+    "message": "Enter custom model name",
+    "description": "Custom model placeholder"
+  },
+  "options_custom_model_help": {
+    "message": "Custom model name (overrides dropdown selection)",
+    "description": "Custom model help text"
+  },
+  "options_temperature": {
+    "message": "Temperature",
+    "description": "Temperature setting label"
+  },
+  "options_temperature_help": {
+    "message": "Controls randomness in translation (0.0 = deterministic, 1.0 = creative)",
+    "description": "Temperature help text"
+  },
+  "options_max_tokens": {
+    "message": "Max Tokens",
+    "description": "Max tokens label"
+  },
+  "options_max_tokens_help": {
+    "message": "Maximum number of tokens in the response",
+    "description": "Max tokens help text"
+  },
+  "options_timeout": {
+    "message": "Timeout (seconds)",
+    "description": "Timeout setting label"
+  },
+  "options_timeout_help": {
+    "message": "Request timeout in seconds",
+    "description": "Timeout help text"
+  },
+
+  "options_translation_settings": {
+    "message": "Translation Settings",
+    "description": "Translation settings section title"
+  },
+  "options_default_source_language": {
+    "message": "Default Source Language",
+    "description": "Default source language label"
+  },
+  "options_default_target_language": {
+    "message": "Default Target Language",
+    "description": "Default target language label"
+  },
+  "options_auto_detect_language": {
+    "message": "Auto-detect page language",
+    "description": "Auto-detect language checkbox label"
+  },
+
+  "options_advanced_settings": {
+    "message": "Advanced Settings",
+    "description": "Advanced settings section title"
+  },
+  "options_smart_content_enabled": {
+    "message": "Smart content extraction",
+    "description": "Smart content extraction checkbox label"
+  },
+  "options_input_field_enabled": {
+    "message": "Input field translation",
+    "description": "Input field translation checkbox label"
+  },
+  "options_input_field_trigger_key": {
+    "message": "Input Field Trigger Key",
+    "description": "Input field trigger key label"
+  },
+  "options_input_field_trigger_key_help": {
+    "message": "Select the key to trigger translation in input fields. F2 is recommended as it's rarely used by websites.",
+    "description": "Input field trigger key help text"
+  },
+  "options_smart_content_enabled_help": {
+    "message": "Uses Mozilla Readability algorithm to automatically identify main content areas of web pages, reducing manual configuration needs. Enabled by default. When disabled, traditional element identification methods will be used.",
+    "description": "Smart content extraction help text"
+  },
+  "options_input_field_enabled_help": {
+    "message": "When enabled, you can trigger translation by pressing a hotkey in any text input field. Translation results will be displayed in a popup near the input field.",
+    "description": "Input field translation help text"
+  },
+  "options_trigger_key_modifiers": {
+    "message": "Trigger Key Modifiers",
+    "description": "Trigger key modifiers label"
+  },
+  "options_trigger_key_modifiers_help": {
+    "message": "Optional modifier keys to combine with the trigger key (e.g., Ctrl+F2).",
+    "description": "Trigger key modifiers help text"
+  },
+  "options_ctrl_key": {
+    "message": "Ctrl",
+    "description": "Ctrl key label"
+  },
+  "options_alt_key": {
+    "message": "Alt",
+    "description": "Alt key label"
+  },
+  "options_shift_key": {
+    "message": "Shift",
+    "description": "Shift key label"
+  },
+  "options_auto_detect_page_language": {
+    "message": "Auto-detect page language for input field translation",
+    "description": "Auto detect page language for input field translation label"
+  },
+  "options_auto_detect_page_language_help": {
+    "message": "When enabled, the system will detect the webpage's language and translate input text to that language. For example, on a Chinese website, English input will be translated to Chinese.",
+    "description": "Auto-detect page language help text"
+  },
+  "options_default_target_language_help": {
+    "message": "Fallback language used when page language detection fails or when input language matches page language.",
+    "description": "Default target language help text"
+  },
+  "options_exclude_selectors_detailed_help": {
+    "message": "Shows all exclude selectors here. Default exclusions are built-in and displayed at top. Add your custom selectors after the \"# User Additional Selectors:\" comment line.",
+    "description": "Detailed exclude selectors help text"
+  },
+
+  "options_interface_settings": {
+    "message": "Interface Settings",
+    "description": "Interface settings section title"
+  },
+  "options_interface_language": {
+    "message": "Interface Language",
+    "description": "Interface language label"
+  },
+  "options_interface_language_help": {
+    "message": "Choose the language for the extension interface",
+    "description": "Interface language help text"
+  },
+
+  "options_performance_settings": {
+    "message": "Performance Settings",
+    "description": "Performance settings section title"
+  },
+  "options_batch_size": {
+    "message": "Concurrent Translation Limit",
+    "description": "Concurrent translation limit label"
+  },
+  "options_batch_size_help": {
+    "message": "Number of paragraphs to translate concurrently (higher values = faster translation, but watch upstream TPM limits)",
+    "description": "Concurrent translation limit help text"
+  },
+  "options_retry_attempts": {
+    "message": "Retry Attempts",
+    "description": "Retry attempts label"
+  },
+  "options_retry_attempts_help": {
+    "message": "Number of retry attempts when translation fails",
+    "description": "Retry attempts help text"
+  },
+  "options_exclude_selectors": {
+    "message": "Exclude Selectors",
+    "description": "Exclude selectors label"
+  },
+  "options_exclude_selectors_placeholder": {
+    "message": "Loading exclude selectors...",
+    "description": "Exclude selectors placeholder"
+  },
+  "options_exclude_selectors_help": {
+    "message": "CSS selectors for elements to exclude from translation",
+    "description": "Exclude selectors help text"
+  },
+
+  "options_save": {
+    "message": "Save Settings",
+    "description": "Save button text"
+  },
+  "options_test_connection": {
+    "message": "Test Connection",
+    "description": "Test connection button text"
+  },
+  "options_fetch_models": {
+    "message": "Fetch Models",
+    "description": "Fetch models button text"
+  },
+  "options_reset": {
+    "message": "Reset to Defaults",
+    "description": "Reset button text"
+  },
+
+  "options_save_success": {
+    "message": "Settings saved successfully!",
+    "description": "Save success message"
+  },
+  "options_save_error": {
+    "message": "Failed to save settings",
+    "description": "Save error message"
+  },
+  "options_test_success": {
+    "message": "Connection test successful!",
+    "description": "Test success message"
+  },
+  "options_test_error": {
+    "message": "Connection test failed",
+    "description": "Test error message"
+  },
+  "options_fetch_models_success": {
+    "message": "Models fetched successfully!",
+    "description": "Fetch models success message"
+  },
+  "options_fetch_models_error": {
+    "message": "Failed to fetch models",
+    "description": "Fetch models error message"
+  },
+
+  "language_auto": {
+    "message": "Auto-detect",
+    "description": "Auto-detect language option"
+  },
+  "language_en": {
+    "message": "English",
+    "description": "English language name"
+  },
+  "language_zh": {
+    "message": "Chinese",
+    "description": "Chinese language name"
+  },
+  "language_zh_CN": {
+    "message": "Simplified Chinese",
+    "description": "Simplified Chinese language name"
+  },
+  "language_zh_TW": {
+    "message": "Traditional Chinese",
+    "description": "Traditional Chinese language name"
+  },
+  "language_ja": {
+    "message": "Japanese",
+    "description": "Japanese language name"
+  },
+  "language_ko": {
+    "message": "Korean",
+    "description": "Korean language name"
+  },
+  "language_fr": {
+    "message": "French",
+    "description": "French language name"
+  },
+  "language_de": {
+    "message": "German",
+    "description": "German language name"
+  },
+  "language_es": {
+    "message": "Spanish",
+    "description": "Spanish language name"
+  },
+  "language_it": {
+    "message": "Italian",
+    "description": "Italian language name"
+  },
+  "language_pt": {
+    "message": "Portuguese",
+    "description": "Portuguese language name"
+  },
+  "language_ru": {
+    "message": "Russian",
+    "description": "Russian language name"
+  },
+  "language_ar": {
+    "message": "Arabic",
+    "description": "Arabic language name"
+  },
+
+  "error_api_key_missing": {
+    "message": "API key not configured",
+    "description": "API key missing error"
+  },
+  "error_translation_failed": {
+    "message": "Translation failed",
+    "description": "Translation failed error"
+  },
+  "error_no_translatable_text": {
+    "message": "No translatable text found on this page",
+    "description": "No translatable text error"
+  },
+  "error_network_error": {
+    "message": "Network error occurred",
+    "description": "Network error"
+  },
+  "error_timeout_error": {
+    "message": "Request timeout",
+    "description": "Timeout error"
+  },
+  "error_invalid_response": {
+    "message": "Invalid API response",
+    "description": "Invalid response error"
+  },
+  "error_quota_exceeded": {
+    "message": "API quota exceeded",
+    "description": "Quota exceeded error"
+  },
+  "error_rate_limited": {
+    "message": "Rate limit exceeded",
+    "description": "Rate limited error"
+  },
+
+  "context_menu_translate_page": {
+    "message": "Translate this page",
+    "description": "Context menu translate page option"
+  },
+  "context_menu_translate_selection": {
+    "message": "Translate selection",
+    "description": "Context menu translate selection option"
+  },
+  "context_menu_restore_original": {
+    "message": "Restore original",
+    "description": "Context menu restore original option"
+  },
+  "context_menu_mode_replace": {
+    "message": "Replace mode",
+    "description": "Context menu replace mode option"
+  },
+  "context_menu_mode_bilingual": {
+    "message": "Bilingual mode",
+    "description": "Context menu bilingual mode option"
+  }
+}

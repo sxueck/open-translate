@@ -19,8 +19,28 @@ class TranslationService {
    * Initialize service with user configuration
    */
   async initialize() {
+    console.log('[TranslationService] Initializing translation service...');
+
     const config = await this.getStoredConfig();
     this.config = { ...this.defaultConfig, ...config };
+
+    console.log('[TranslationService] Configuration loaded:', {
+      hasApiKey: !!this.config.apiKey,
+      apiUrl: this.config.apiUrl,
+      model: this.config.model,
+      customModel: this.config.customModel
+    });
+
+    // 验证必要的配置
+    if (!this.config.apiKey) {
+      console.warn('[TranslationService] API key not configured');
+    }
+
+    if (!this.config.apiUrl) {
+      console.warn('[TranslationService] API URL not configured');
+    }
+
+    console.log('[TranslationService] Translation service initialized successfully');
   }
 
   /**
@@ -125,19 +145,40 @@ class TranslationService {
    * Translate text using configured API
    */
   async translateText(text, targetLanguage = 'zh-CN', sourceLanguage = 'auto', options = {}) {
+    console.log('[TranslationService] Starting translation:', {
+      textLength: text?.length,
+      targetLanguage,
+      sourceLanguage,
+      hasOptions: !!options,
+      context: options.context
+    });
+
     if (!this.config.apiKey) {
+      console.error('[TranslationService] API key not configured');
       throw new Error('API key not configured');
     }
 
     // 增强选项，添加上下文信息
     const enhancedOptions = await this.enhanceTranslationOptions(options, text);
+    console.log('[TranslationService] Enhanced options prepared');
 
     const prompt = this.buildTranslationPrompt(text, targetLanguage, sourceLanguage, enhancedOptions);
+    console.log('[TranslationService] Translation prompt built, length:', prompt?.length);
 
     try {
+      console.log('[TranslationService] Making API request...');
       const response = await this.makeAPIRequest(prompt, enhancedOptions);
-      return this.extractTranslation(response);
+      console.log('[TranslationService] API request completed successfully');
+
+      const translation = this.extractTranslation(response);
+      console.log('[TranslationService] Translation extracted:', {
+        hasTranslation: !!translation,
+        translationLength: translation?.length
+      });
+
+      return translation;
     } catch (error) {
+      console.error('[TranslationService] Translation failed:', error);
 
       // Provide more specific error messages
       if (error.name === 'AbortError') {

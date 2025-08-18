@@ -48,24 +48,22 @@ jobs:
 
     - name: Create extension package
       run: |
-        # Create a clean directory for packaging
-        mkdir -p dist/extension
+        # Use the existing package script for consistency
+        npm run package:zip
 
-        # Copy all necessary files
-        cp manifest.json dist/extension/
-        cp -r src dist/extension/
-        cp -r assets dist/extension/
+        # Verify _locales directory exists in the package
+        if [ ! -d "dist/extension/_locales" ]; then
+          echo "Error: _locales directory missing from package"
+          exit 1
+        fi
 
-        # Copy required node_modules dependencies
-        mkdir -p dist/extension/node_modules/@mozilla/readability
-        cp node_modules/@mozilla/readability/Readability.js dist/extension/node_modules/@mozilla/readability/
-        cp node_modules/@mozilla/readability/Readability-readerable.js dist/extension/node_modules/@mozilla/readability/
+        # Verify required locale files exist
+        if [ ! -f "dist/extension/_locales/en/messages.json" ]; then
+          echo "Error: English locale file missing"
+          exit 1
+        fi
 
-        # Remove any development files
-        find dist/extension -name "*.md" -delete
-        find dist/extension -name ".DS_Store" -delete
-
-        echo "Extension package created in dist/extension"
+        echo "Extension package created and verified in dist/extension"
         
     - name: Install Chrome for CRX packaging
       run: |
@@ -82,20 +80,35 @@ jobs:
         
     - name: Package CRX
       run: |
+        # Verify extension structure before packaging
+        echo "Verifying extension structure..."
+        ls -la dist/extension/
+        ls -la dist/extension/_locales/
+
         # Create CRX package using Chrome
         google-chrome --headless --disable-gpu --pack-extension=dist/extension --pack-extension-key=extension.pem
-        
+
+        # Verify CRX was created
+        if [ ! -f "dist/extension.crx" ]; then
+          echo "Error: CRX file was not generated"
+          exit 1
+        fi
+
         # Move the generated CRX to a predictable location
         mv dist/extension.crx open-translate-${GITHUB_REF#refs/tags/}.crx
-        
+
         echo "CRX package created: open-translate-${GITHUB_REF#refs/tags/}.crx"
         
-    - name: Create ZIP package
+    - name: Verify ZIP package
       run: |
-        cd dist/extension
-        zip -r ../../open-translate-${GITHUB_REF#refs/tags/}.zip .
-        cd ../..
-        echo "ZIP package created: open-translate-${GITHUB_REF#refs/tags/}.zip"
+        # ZIP was already created by npm run package:zip, just rename it
+        if [ -f "dist/open-translate-v*.zip" ]; then
+          mv dist/open-translate-v*.zip open-translate-${GITHUB_REF#refs/tags/}.zip
+        else
+          echo "Error: ZIP package not found"
+          exit 1
+        fi
+        echo "ZIP package verified: open-translate-${GITHUB_REF#refs/tags/}.zip"
         
     - name: Generate release notes
       run: |
@@ -124,6 +137,7 @@ jobs:
       with:
         files: |
           open-translate-*.zip
+          open-translate-*.crx
         body_path: release-notes.md
         draft: false
         prerelease: false
@@ -136,5 +150,6 @@ jobs:
         name: extension-packages
         path: |
           open-translate-*.zip
+          open-translate-*.crx
           dist/extension/**
         retention-days: 30

@@ -39,12 +39,18 @@ class InputFieldListener {
     this.inputSelectors = [
       'input[type="text"]',
       'input[type="search"]',
-      'input[type="email"]',
       'input[type="url"]',
+      'input[type="tel"]',
       'input:not([type])',
       'textarea',
       '[contenteditable="true"]',
-      '[contenteditable=""]'
+      '[contenteditable=""]',
+      '[role="textbox"]',
+      '[role="searchbox"]',
+      '[role="combobox"]',
+      'div[contenteditable]',
+      'span[contenteditable]',
+      'p[contenteditable]'
     ];
 
     // 语言检测正则表达式
@@ -63,19 +69,66 @@ class InputFieldListener {
    * 初始化监听器
    */
   async initialize(translationService) {
+    console.log('[InputFieldListener] Initializing input field listener...');
+
     if (!translationService) {
       throw new Error('Translation service is required');
     }
 
     this.translationService = translationService;
+    console.log('[InputFieldListener] Translation service assigned');
+
+    // 验证翻译服务配置
+    await this.validateTranslationService();
 
     // 加载用户配置
     await this.loadUserSettings();
+    console.log('[InputFieldListener] User settings loaded');
 
     // 检测页面语言
     await this.detectPageLanguage();
+    console.log('[InputFieldListener] Page language detected:', this.pageLanguage);
 
     this.enable();
+    console.log('[InputFieldListener] Input field listener enabled');
+  }
+
+  /**
+   * 验证翻译服务配置
+   */
+  async validateTranslationService() {
+    console.log('[InputFieldListener] Validating translation service...');
+
+    if (!this.translationService) {
+      throw new Error('Translation service not available');
+    }
+
+    // 检查翻译服务是否已初始化
+    if (!this.translationService.config) {
+      console.warn('[InputFieldListener] Translation service config not found, attempting to initialize...');
+      try {
+        await this.translationService.initialize();
+      } catch (error) {
+        console.error('[InputFieldListener] Failed to initialize translation service:', error);
+        throw new Error('Failed to initialize translation service: ' + error.message);
+      }
+    }
+
+    // 检查 API 密钥
+    if (!this.translationService.config.apiKey) {
+      throw new Error('API key not configured. Please set up your API key in the extension settings.');
+    }
+
+    // 检查 API URL
+    if (!this.translationService.config.apiUrl) {
+      throw new Error('API URL not configured. Please check your extension settings.');
+    }
+
+    console.log('[InputFieldListener] Translation service validation passed:', {
+      hasApiKey: !!this.translationService.config.apiKey,
+      apiUrl: this.translationService.config.apiUrl,
+      model: this.translationService.config.model
+    });
   }
 
   /**
@@ -127,12 +180,16 @@ class InputFieldListener {
    * 附加事件监听器
    */
   attachEventListeners() {
-    // 使用事件委托监听所有输入元素
+    // 使用事件委托监听所有输入元素，同时在捕获和冒泡阶段都监听
     document.addEventListener('keydown', this.handleKeyDown, true);
+    document.addEventListener('keydown', this.handleKeyDown, false);
     document.addEventListener('focus', this.handleFocus, true);
     document.addEventListener('blur', this.handleBlur, true);
     document.addEventListener('input', this.handleInput, true);
     document.addEventListener('contextmenu', this.handleContextMenu, true);
+
+    // 额外监听 window 级别的键盘事件，确保不会遗漏
+    window.addEventListener('keydown', this.handleKeyDown, true);
   }
 
   /**
@@ -140,10 +197,14 @@ class InputFieldListener {
    */
   detachEventListeners() {
     document.removeEventListener('keydown', this.handleKeyDown, true);
+    document.removeEventListener('keydown', this.handleKeyDown, false);
     document.removeEventListener('focus', this.handleFocus, true);
     document.removeEventListener('blur', this.handleBlur, true);
     document.removeEventListener('input', this.handleInput, true);
     document.removeEventListener('contextmenu', this.handleContextMenu, true);
+
+    // 移除 window 级别的监听器
+    window.removeEventListener('keydown', this.handleKeyDown, true);
   }
 
   /**
@@ -152,10 +213,22 @@ class InputFieldListener {
   handleKeyDown(event) {
     if (!this.isEnabled || this.isTranslating) return;
 
-    // 检查是否是配置的触发键组合
-    if (this.isValidInputElement(event.target) && this.isTriggerKeyPressed(event)) {
-      event.preventDefault();
-      this.triggerTranslation();
+    // 检查是否按下了触发键组合
+    if (this.isTriggerKeyPressed(event)) {
+      // 获取当前焦点元素或事件目标
+      const targetElement = document.activeElement || event.target;
+
+      // 检查是否为有效的输入元素
+      if (this.isValidInputElement(targetElement)) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        // 更新当前输入元素
+        this.currentInputElement = targetElement;
+
+        // 触发翻译
+        this.triggerTranslation();
+      }
     }
   }
 
@@ -185,8 +258,16 @@ class InputFieldListener {
    */
   handleBlur(event) {
     if (event.target === this.currentInputElement) {
-      this.currentInputElement = null;
-      this.hideAnimation();
+      console.log('[InputFieldListener] Input element lost focus:', {
+        isTranslating: this.isTranslating
+      });
+
+      // 如果正在翻译，不要清除当前输入元素和隐藏动画
+      // 让翻译完成后再处理
+      if (!this.isTranslating) {
+        this.currentInputElement = null;
+        this.hideAnimation();
+      }
     }
   }
 
@@ -219,13 +300,86 @@ class InputFieldListener {
     if (!element) return false;
 
     // 检查是否匹配支持的输入元素
-    return this.inputSelectors.some(selector => {
+    const matchesSelector = this.inputSelectors.some(selector => {
       try {
         return element.matches(selector);
       } catch (e) {
         return false;
       }
     });
+
+    if (matchesSelector) return true;
+
+    // 额外检查：特殊情况处理
+    // 1. 检查是否为可编辑元素
+    if (element.isContentEditable) return true;
+
+    // 2. 检查是否为 Google 搜索框等特殊输入框
+    if (this.isSpecialInputElement(element)) return true;
+
+    // 3. 检查父元素是否为输入容器
+    if (this.isInputContainer(element)) return true;
+
+    return false;
+  }
+
+  /**
+   * 检查是否为特殊输入元素（如 Google 搜索框）
+   */
+  isSpecialInputElement(element) {
+    // Google 搜索框
+    if (element.name === 'q' || element.getAttribute('aria-label')?.includes('搜索') ||
+        element.getAttribute('aria-label')?.includes('Search')) {
+      return true;
+    }
+
+    // 检查 class 名称中是否包含输入相关关键词
+    const className = element.className || '';
+    const inputKeywords = ['search', 'input', 'textbox', 'field', 'query'];
+    if (inputKeywords.some(keyword => className.toLowerCase().includes(keyword))) {
+      return true;
+    }
+
+    // 检查 id 中是否包含输入相关关键词
+    const id = element.id || '';
+    if (inputKeywords.some(keyword => id.toLowerCase().includes(keyword))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 检查是否为输入容器的子元素
+   */
+  isInputContainer(element) {
+    let parent = element.parentElement;
+    let depth = 0;
+    const maxDepth = 3;
+
+    while (parent && depth < maxDepth) {
+      // 检查父元素是否为输入容器
+      if (parent.matches && this.inputSelectors.some(selector => {
+        try {
+          return parent.matches(selector);
+        } catch (e) {
+          return false;
+        }
+      })) {
+        return true;
+      }
+
+      // 检查父元素的 role 属性
+      const role = parent.getAttribute('role');
+      if (role && ['textbox', 'searchbox', 'combobox'].includes(role)) {
+        return true;
+      }
+
+      parent = parent.parentElement;
+      depth++;
+    }
+
+    return false;
   }
 
   /**
@@ -289,13 +443,15 @@ class InputFieldListener {
    * 检测文本语言
    */
   detectTextLanguage(text) {
-    if (!text || text.trim().length < 10) return null;
+    if (!text || text.trim().length < 20) return null;
 
+    const trimmedText = text.trim();
     const scores = {};
+    const totalChars = trimmedText.length;
 
     // 计算各语言的匹配分数
     for (const [lang, pattern] of Object.entries(this.languagePatterns)) {
-      const matches = text.match(pattern);
+      const matches = trimmedText.match(new RegExp(pattern.source, 'g'));
       if (matches) {
         scores[lang] = matches.length;
       }
@@ -311,6 +467,26 @@ class InputFieldListener {
         detectedLang = lang;
       }
     }
+
+    // 设置最低匹配阈值：至少需要有10个特征字符，或者匹配度超过40%
+    const minRequiredMatches = Math.max(10, Math.floor(totalChars * 0.4));
+
+    if (maxScore < minRequiredMatches) {
+      console.log('[InputFieldListener] Language detection failed: insufficient matches', {
+        maxScore,
+        minRequiredMatches,
+        textLength: totalChars,
+        text: trimmedText.substring(0, 50) + '...'
+      });
+      return null;
+    }
+
+    console.log('[InputFieldListener] Language detected:', {
+      detectedLang,
+      maxScore,
+      minRequiredMatches,
+      textLength: totalChars
+    });
 
     return this.normalizeLanguageCode(detectedLang);
   }
@@ -348,8 +524,11 @@ class InputFieldListener {
 
     // 验证文本内容
     if (!this.isValidText(text)) {
+      console.log('[InputFieldListener] Text validation failed:', { text, length: text?.length });
       return;
     }
+
+    console.log('[InputFieldListener] Starting translation:', { text: text.substring(0, 50) + '...', length: text.length });
 
     try {
       this.isTranslating = true;
@@ -357,16 +536,44 @@ class InputFieldListener {
       // 显示翻译动画
       this.showTranslationAnimation();
 
+      // 检查翻译服务状态
+      if (!this.translationService) {
+        throw new Error('Translation service not initialized');
+      }
+
+      console.log('[InputFieldListener] Translation service available, starting translation...');
+
       // 智能选择目标语言并翻译
       const translation = await this.translateTextWithSmartLanguage(text);
 
+      console.log('[InputFieldListener] Translation completed:', {
+        originalLength: text.length,
+        translationLength: translation?.length,
+        translation: translation?.substring(0, 100) + '...'
+      });
+
       // 显示翻译结果
-      this.showTranslationResult(translation, text);
+      this.showTranslationResult(translation);
 
     } catch (error) {
+      console.error('[InputFieldListener] Translation failed:', error);
+      console.error('[InputFieldListener] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        translationServiceAvailable: !!this.translationService,
+        currentInputElement: !!this.currentInputElement
+      });
       this.showTranslationError(error.message);
     } finally {
       this.isTranslating = false;
+      console.log('[InputFieldListener] Translation process completed');
+
+      // 如果输入框已经失去焦点，现在可以安全地清理了
+      if (this.currentInputElement && document.activeElement !== this.currentInputElement) {
+        console.log('[InputFieldListener] Cleaning up after translation completion - input lost focus');
+        this.currentInputElement = null;
+        this.hideAnimation();
+      }
     }
   }
 
@@ -378,42 +585,94 @@ class InputFieldListener {
       throw new Error('Translation service not available');
     }
 
+    console.log('[InputFieldListener] Starting smart language translation...', {
+      textLength: text.length,
+      textPreview: text.substring(0, 50) + '...'
+    });
+
     // 检测输入文本的语言
     const inputLanguage = this.detectTextLanguage(text);
+    console.log('[InputFieldListener] Detected input language:', inputLanguage);
 
     // 确定目标语言
     const targetLanguage = this.determineTargetLanguage(inputLanguage);
+    console.log('[InputFieldListener] Target language determined:', targetLanguage);
 
-    return await this.translationService.translateText(
-      text.trim(),
-      targetLanguage,
-      'auto',
-      {
-        context: 'input-field',
-        inputLanguage: inputLanguage,
-        pageLanguage: this.pageLanguage
-      }
-    );
+    // 验证翻译参数
+    if (!targetLanguage) {
+      throw new Error('Unable to determine target language');
+    }
+
+    // 如果检测到的输入语言与目标语言相同，可能不需要翻译
+    if (inputLanguage && inputLanguage === targetLanguage) {
+      console.log('[InputFieldListener] Input and target languages are the same, skipping translation');
+      return text.trim();
+    }
+
+    const translationOptions = {
+      context: 'input-field',
+      inputLanguage: inputLanguage || 'auto',
+      pageLanguage: this.pageLanguage
+    };
+
+    console.log('[InputFieldListener] Translation options:', translationOptions);
+
+    try {
+      const result = await this.translationService.translateText(
+        text.trim(),
+        targetLanguage,
+        inputLanguage || 'auto',
+        translationOptions
+      );
+
+      console.log('[InputFieldListener] Translation service returned result:', {
+        hasResult: !!result,
+        resultType: typeof result,
+        resultLength: result?.length
+      });
+
+      return result;
+    } catch (error) {
+      console.error('[InputFieldListener] Translation service error:', error);
+      throw error;
+    }
   }
 
   /**
    * 确定目标语言
    */
   determineTargetLanguage(inputLanguage) {
-    // 如果没有检测到输入语言，使用页面语言或默认语言
+    console.log('[InputFieldListener] Determining target language:', {
+      inputLanguage,
+      pageLanguage: this.pageLanguage,
+      autoDetectPageLanguage: this.options.autoDetectPageLanguage,
+      defaultTargetLanguage: this.options.defaultTargetLanguage
+    });
+
+    // 如果没有检测到输入语言，使用智能默认策略
     if (!inputLanguage) {
-      return this.pageLanguage || this.options.defaultTargetLanguage;
+      // 优先使用页面语言，但要确保不是 'auto'
+      if (this.pageLanguage && this.pageLanguage !== 'auto') {
+        console.log('[InputFieldListener] Using page language as target:', this.pageLanguage);
+        return this.pageLanguage;
+      }
+
+      // 否则使用默认目标语言
+      console.log('[InputFieldListener] Using default target language:', this.options.defaultTargetLanguage);
+      return this.options.defaultTargetLanguage;
     }
 
-    // 如果启用了页面语言检测
-    if (this.options.autoDetectPageLanguage && this.pageLanguage) {
+    // 如果启用了页面语言检测且页面语言有效
+    if (this.options.autoDetectPageLanguage && this.pageLanguage && this.pageLanguage !== 'auto') {
       // 如果输入语言与页面语言不同，翻译到页面语言
       if (inputLanguage !== this.pageLanguage) {
+        console.log('[InputFieldListener] Translating to page language:', this.pageLanguage);
         return this.pageLanguage;
       }
     }
 
-    // 如果输入语言与页面语言相同，或者没有页面语言，使用默认目标语言
+    // 如果输入语言与页面语言相同，或者没有有效的页面语言，使用默认目标语言
+    console.log('[InputFieldListener] Using default target language (fallback):', this.options.defaultTargetLanguage);
     return this.options.defaultTargetLanguage;
   }
 
@@ -455,7 +714,15 @@ class InputFieldListener {
    * 显示翻译动画
    */
   showTranslationAnimation() {
-    if (!this.options.enableAnimation || !this.currentInputElement) return;
+    console.log('[InputFieldListener] Showing translation animation:', {
+      enableAnimation: this.options.enableAnimation,
+      hasCurrentInputElement: !!this.currentInputElement
+    });
+
+    if (!this.options.enableAnimation || !this.currentInputElement) {
+      console.warn('[InputFieldListener] Cannot show animation: animation disabled or no input element');
+      return;
+    }
 
     this.hideAnimation();
 
@@ -486,6 +753,8 @@ class InputFieldListener {
     });
 
     document.body.appendChild(this.animationElement);
+    console.log('[InputFieldListener] Translation animation UI element added to DOM');
+
     this.injectAnimationStyles();
   }
 
@@ -542,64 +811,58 @@ class InputFieldListener {
   }
 
   /**
-   * 显示翻译结果
+   * 显示翻译结果 - 直接替换模式
    */
-  showTranslationResult(translation, originalText) {
-    if (!this.currentInputElement) return;
-
-    this.hideAnimation();
-
-    const rect = this.currentInputElement.getBoundingClientRect();
-    this.animationElement = document.createElement('div');
-    this.animationElement.className = 'ot-input-translation-result';
-    this.animationElement.innerHTML = `
-      <div style="font-weight: bold; margin-bottom: 4px; color: #333;">翻译结果：</div>
-      <div style="color: #555;">${this.escapeHtml(translation)}</div>
-      <div class="ot-translation-actions">
-        <button class="ot-translation-btn" data-action="copy">复制</button>
-        <button class="ot-translation-btn" data-action="replace">替换</button>
-        <button class="ot-translation-btn" data-action="close">关闭</button>
-      </div>
-    `;
-
-    Object.assign(this.animationElement.style, {
-      position: 'fixed',
-      top: `${rect.bottom + 5}px`,
-      left: `${rect.left}px`,
-      zIndex: '10000',
-      background: '#fff',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      padding: '12px',
-      fontSize: '13px',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-      maxWidth: '300px'
+  showTranslationResult(translation) {
+    console.log('[InputFieldListener] Showing translation result:', {
+      hasTranslation: !!translation,
+      translationLength: translation?.length,
+      hasCurrentInputElement: !!this.currentInputElement
     });
 
-    // 添加按钮事件监听
-    this.animationElement.addEventListener('click', (e) => {
-      const action = e.target.dataset.action;
-      if (action === 'copy') {
-        this.copyToClipboard(translation);
-      } else if (action === 'replace') {
-        this.replaceInputText(translation);
-        this.hideAnimation();
-      } else if (action === 'close') {
-        this.hideAnimation();
-      }
-    });
+    if (!this.currentInputElement) {
+      console.warn('[InputFieldListener] Cannot show translation result: no current input element');
+      this.hideAnimation();
+      return;
+    }
 
-    document.body.appendChild(this.animationElement);
+    if (!translation || translation.trim() === '') {
+      console.warn('[InputFieldListener] Empty translation result received');
+      this.showTranslationError('翻译结果为空');
+      return;
+    }
 
-    // 5秒后自动隐藏
-    setTimeout(() => this.hideAnimation(), 5000);
+    try {
+      // 隐藏翻译动画
+      this.hideAnimation();
+
+      // 直接替换输入框文本
+      this.replaceInputText(translation);
+
+      // 显示简短的成功提示
+      this.showBriefMessage('文本已翻译并替换');
+
+      console.log('[InputFieldListener] Text replaced directly with translation');
+    } catch (error) {
+      console.error('[InputFieldListener] Failed to replace text:', error);
+      this.hideAnimation();
+      this.showBriefMessage('文本替换失败');
+    }
   }
 
   /**
    * 显示翻译错误
    */
   showTranslationError(errorMessage) {
-    if (!this.currentInputElement) return;
+    console.log('[InputFieldListener] Showing translation error:', {
+      errorMessage,
+      hasCurrentInputElement: !!this.currentInputElement
+    });
+
+    if (!this.currentInputElement) {
+      console.warn('[InputFieldListener] Cannot show translation error: no current input element');
+      return;
+    }
 
     this.hideAnimation();
 
@@ -624,6 +887,7 @@ class InputFieldListener {
     });
 
     document.body.appendChild(this.animationElement);
+    console.log('[InputFieldListener] Translation error UI element added to DOM');
 
     // 3秒后自动隐藏
     setTimeout(() => this.hideAnimation(), 3000);
@@ -664,16 +928,127 @@ class InputFieldListener {
   replaceInputText(newText) {
     if (!this.currentInputElement) return;
 
-    if (this.currentInputElement.contentEditable === 'true' || 
-        this.currentInputElement.contentEditable === '') {
-      this.currentInputElement.textContent = newText;
-    } else {
-      this.currentInputElement.value = newText;
-    }
+    const element = this.currentInputElement;
 
-    // 触发input事件
-    this.currentInputElement.dispatchEvent(new Event('input', { bubbles: true }));
-    this.showBriefMessage('文本已替换');
+    try {
+
+      // 处理不同类型的输入元素
+      if (element.isContentEditable || element.contentEditable === 'true' || element.contentEditable === '') {
+        // 可编辑内容元素
+        this.replaceContentEditableText(element, newText);
+      } else if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+        // 标准输入框和文本域
+        this.replaceStandardInputText(element, newText);
+      } else {
+        // 其他特殊元素，尝试多种方法
+        this.replaceSpecialElementText(element, newText);
+      }
+
+      // 触发必要的事件
+      this.triggerInputEvents(element);
+
+      // 尝试恢复光标位置到文本末尾
+      this.restoreCursorPosition(element, newText.length);
+
+      console.log('[InputFieldListener] Text replacement completed successfully');
+
+    } catch (error) {
+      console.error('[InputFieldListener] Error replacing text:', error);
+      throw error; // 重新抛出错误，让调用者处理
+    }
+  }
+
+  /**
+   * 替换可编辑内容元素的文本
+   */
+  replaceContentEditableText(element, newText) {
+    // 清除现有内容
+    element.innerHTML = '';
+
+    // 设置新文本
+    element.textContent = newText;
+
+    // 将光标移到末尾
+    if (window.getSelection) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+
+  /**
+   * 替换标准输入框的文本
+   */
+  replaceStandardInputText(element, newText) {
+    element.value = newText;
+
+    // 将光标移到末尾
+    if (element.setSelectionRange) {
+      element.setSelectionRange(newText.length, newText.length);
+    }
+  }
+
+  /**
+   * 替换特殊元素的文本
+   */
+  replaceSpecialElementText(element, newText) {
+    // 尝试多种方法
+    if (element.value !== undefined) {
+      element.value = newText;
+    } else if (element.textContent !== undefined) {
+      element.textContent = newText;
+    } else if (element.innerText !== undefined) {
+      element.innerText = newText;
+    } else if (element.innerHTML !== undefined) {
+      element.innerHTML = this.escapeHtml(newText);
+    }
+  }
+
+  /**
+   * 触发输入相关事件
+   */
+  triggerInputEvents(element) {
+    const events = ['input', 'change', 'keyup'];
+
+    events.forEach(eventType => {
+      try {
+        const event = new Event(eventType, {
+          bubbles: true,
+          cancelable: true
+        });
+        element.dispatchEvent(event);
+      } catch (error) {
+        // 如果现代事件创建失败，尝试旧方法
+        try {
+          const event = document.createEvent('HTMLEvents');
+          event.initEvent(eventType, true, true);
+          element.dispatchEvent(event);
+        } catch (fallbackError) {
+          console.warn(`Failed to trigger ${eventType} event:`, fallbackError);
+        }
+      }
+    });
+  }
+
+  /**
+   * 恢复光标位置
+   */
+  restoreCursorPosition(element, position) {
+    try {
+      if (element.setSelectionRange && typeof element.selectionStart === 'number') {
+        element.setSelectionRange(position, position);
+      } else if (element.createTextRange) {
+        // IE 兼容
+        const range = element.createTextRange();
+        range.move('character', position);
+        range.select();
+      }
+    } catch (error) {
+      console.warn('Failed to restore cursor position:', error);
+    }
   }
 
   /**
@@ -712,14 +1087,27 @@ class InputFieldListener {
    * 清理资源
    */
   cleanup() {
+    console.log('[InputFieldListener] Cleaning up resources...');
+
+    // 重置翻译状态
+    this.isTranslating = false;
+
+    // 隐藏动画和清理UI元素
     this.hideAnimation();
+
+    // 清理当前输入元素引用
     this.currentInputElement = null;
+
+    // 清理缓存
     this.languageDetectionCache.clear();
 
+    // 清理定时器
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+
+    console.log('[InputFieldListener] Resource cleanup completed');
   }
 
   /**

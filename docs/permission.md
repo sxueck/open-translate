@@ -26,19 +26,7 @@
 - **Data Types**: Only stores configuration parameters and user preferences, does not store translation content or sensitive information
 - **Storage Scope**: Uses Chrome sync storage, supports cross-device synchronization of user settings
 
-### 3. scripting Permission
-
-**Justification:**
-- **Functional Requirement**: The extension needs to inject content scripts into webpages to implement translation functionality
-- **Specific Uses**:
-  - Inject text extraction scripts to identify and extract translatable text from webpages
-  - Inject translation rendering scripts to display translation results in webpages
-  - Inject style files to ensure proper display of translation interface
-  - Dynamically execute translation-related JavaScript code
-- **Injection Scope**: Only injects into webpages that support translation, excludes extension pages, Chrome internal pages, etc.
-- **Security**: Injected scripts are only used for translation functionality, do not collect user data or perform malicious operations
-
-### 4. contextMenus Permission
+### 3. contextMenus Permission
 
 **Justification:**
 - **Functional Requirement**: Provide users with convenient right-click menu translation options
@@ -49,7 +37,7 @@
   - Add translation mode switching options (replace mode/bilingual mode)
 - **User Experience**: Provides quick access to translation functionality without needing to open the extension popup
 
-### 5. Host Permissions (http://*/*, https://*/*)
+### 4. Host Permissions (http://*/*, https://*/*)
 
 **Justification:**
 - **Functional Requirement**: The extension needs access to all websites to provide universal webpage translation services

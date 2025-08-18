@@ -47,7 +47,7 @@ fs.copyFileSync('manifest.json', path.join(packageDir, 'manifest.json'));
 console.log('✓ manifest.json');
 
 // Copy source directories
-const srcDirs = ['src', 'assets'];
+const srcDirs = ['src', 'assets', '_locales'];
 srcDirs.forEach(dir => {
   if (fs.existsSync(dir)) {
     copyDirectory(dir, path.join(packageDir, dir));

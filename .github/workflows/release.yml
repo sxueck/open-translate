@@ -63,6 +63,12 @@ jobs:
           exit 1
         fi
 
+        # Verify Readability.js files exist in the package
+        if [ ! -f "dist/extension/vendor/readability/Readability.js" ]; then
+          echo "Error: Readability.js missing from package"
+          exit 1
+        fi
+
         echo "Extension package created and verified in dist/extension"
         
     - name: Install Chrome for CRX packaging

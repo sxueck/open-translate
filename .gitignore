@@ -1,2 +1,7 @@
 .DS_Store
 node_modules
+dist/
+build-info.json
+
+# Keep vendor directory in version control
+!vendor/

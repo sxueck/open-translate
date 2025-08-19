@@ -26,10 +26,10 @@ const requiredFiles = [
   'src/options/options.js'
 ];
 
-// Check for npm dependencies
+// Check for vendor dependencies
 const requiredDependencies = [
-  'node_modules/@mozilla/readability/Readability.js',
-  'node_modules/@mozilla/readability/Readability-readerable.js'
+  'vendor/readability/Readability.js',
+  'vendor/readability/Readability-readerable.js'
 ];
 
 console.log('Validating required files...');
@@ -44,13 +44,13 @@ requiredFiles.forEach(file => {
   }
 });
 
-console.log('\nChecking npm dependencies...');
+console.log('\nChecking vendor dependencies...');
 requiredDependencies.forEach(file => {
   if (fs.existsSync(file)) {
     console.log(`✓ ${file}`);
   } else {
     console.log(`✗ ${file} - MISSING`);
-    console.log('  Run "npm install" to install dependencies');
+    console.log('  Run "npm run setup-vendor" to copy vendor dependencies');
     allFilesExist = false;
   }
 });

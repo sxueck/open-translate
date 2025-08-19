@@ -47,7 +47,7 @@ fs.copyFileSync('manifest.json', path.join(packageDir, 'manifest.json'));
 console.log('✓ manifest.json');
 
 // Copy source directories
-const srcDirs = ['src', 'assets', '_locales'];
+const srcDirs = ['src', 'assets', '_locales', 'vendor'];
 srcDirs.forEach(dir => {
   if (fs.existsSync(dir)) {
     copyDirectory(dir, path.join(packageDir, dir));
@@ -55,27 +55,8 @@ srcDirs.forEach(dir => {
   }
 });
 
-// Copy required npm dependencies
-console.log('\nCopying npm dependencies...');
-const nodeModulesDir = path.join(packageDir, 'node_modules', '@mozilla', 'readability');
-fs.mkdirSync(nodeModulesDir, { recursive: true });
-
-const readabilityFiles = [
-  'node_modules/@mozilla/readability/Readability.js',
-  'node_modules/@mozilla/readability/Readability-readerable.js'
-];
-
-readabilityFiles.forEach(file => {
-  if (fs.existsSync(file)) {
-    const fileName = path.basename(file);
-    fs.copyFileSync(file, path.join(nodeModulesDir, fileName));
-    console.log(`✓ ${file}`);
-  } else {
-    console.error(`✗ ${file} - MISSING`);
-    console.error('Run "npm install" to install dependencies');
-    process.exit(1);
-  }
-});
+// Vendor dependencies are already copied with srcDirs above
+console.log('\nVendor dependencies copied with source directories');
 
 // Generate PNG icons if needed
 console.log('\nProcessing icons...');

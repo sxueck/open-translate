@@ -20,8 +20,8 @@
     {
       "matches": ["<all_urls>"],
       "js": [
-        "node_modules/@mozilla/readability/Readability.js",
-        "node_modules/@mozilla/readability/Readability-readerable.js",
+        "vendor/readability/Readability.js",
+        "vendor/readability/Readability-readerable.js",
         "src/shared/constants.js",
         "src/shared/utils.js",
         "src/shared/config.js",

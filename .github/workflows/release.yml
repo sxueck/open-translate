@@ -108,13 +108,16 @@ jobs:
     - name: Verify ZIP package
       run: |
         # ZIP was already created by npm run package:zip, just rename it
-        if [ -f "dist/open-translate-v*.zip" ]; then
-          mv dist/open-translate-v*.zip open-translate-${GITHUB_REF#refs/tags/}.zip
+        ZIP_FILE=$(find dist -name "open-translate-v*.zip" -type f | head -1)
+        if [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ]; then
+          mv "$ZIP_FILE" "open-translate-${GITHUB_REF#refs/tags/}.zip"
+          echo "ZIP package verified: open-translate-${GITHUB_REF#refs/tags/}.zip"
         else
-          echo "Error: ZIP package not found"
+          echo "Error: ZIP package not found in dist directory"
+          echo "Contents of dist directory:"
+          ls -la dist/
           exit 1
         fi
-        echo "ZIP package verified: open-translate-${GITHUB_REF#refs/tags/}.zip"
         
     - name: Generate release notes
       run: |

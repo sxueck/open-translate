@@ -268,6 +268,7 @@ class TranslationService {
     if (options.translationMode === TRANSLATION_MODES.REPLACE) {
       baseInstructions.push('12. Return only plain text translation without any HTML tags, markup, or formatting');
       baseInstructions.push('13. If the input contains HTML tags, extract and translate only the text content, ignoring all HTML markup');
+      baseInstructions.push('14. CRITICAL: Do not repeat the translation multiple times - provide only one clean translation per input');
     } else if (this.containsHtmlTags(options.text || text)) {
       baseInstructions.push('12. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
       baseInstructions.push('13. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
@@ -795,8 +796,10 @@ ${sanitizedText}`;
       if (hasHtml) {
         baseInstructions.push('11. Some segments contain HTML tags. Extract and translate only the text content, ignoring all HTML markup');
         baseInstructions.push('12. Return only plain text translations without any HTML tags, markup, or formatting');
+        baseInstructions.push('13. CRITICAL: Each numbered item should have exactly ONE translation - do not repeat translations');
       } else {
         baseInstructions.push('11. Return only plain text translations without any HTML tags, markup, or formatting');
+        baseInstructions.push('12. CRITICAL: Each numbered item should have exactly ONE translation - do not repeat translations');
       }
     } else if (hasHtml) {
       baseInstructions.push('11. Some segments contain HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');

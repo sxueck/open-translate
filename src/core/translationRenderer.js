@@ -39,11 +39,58 @@ class TranslationRenderer {
     // 确保在Replace模式下清理任何双语模式残留
     this.cleanupAllBilingualElements();
 
-    textNodes.forEach((textNode, index) => {
-      if (translations[index] && !translations[index].error) {
-        this.replaceTextContent(textNode, translations[index]);
+    // Check if we're dealing with paragraph groups or individual text nodes
+    if (Array.isArray(textNodes) && textNodes.length > 0 && textNodes[0].textNodes) {
+      // Handle paragraph groups
+      this.renderParagraphGroupsReplaceMode(textNodes, translations);
+    } else {
+      // Handle individual text nodes (legacy mode)
+      textNodes.forEach((textNode, index) => {
+        if (translations[index] && !translations[index].error) {
+          this.replaceTextContent(textNode, translations[index]);
+        }
+      });
+    }
+  }
+
+  /**
+   * Render paragraph groups in replace mode
+   */
+  renderParagraphGroupsReplaceMode(paragraphGroups, translations) {
+    paragraphGroups.forEach((group, index) => {
+      const translation = translations[index];
+      if (translation && !translation.error) {
+        this.replaceParagraphGroupContent(group, translation);
       }
     });
+  }
+
+  /**
+   * Replace content for a paragraph group
+   */
+  replaceParagraphGroupContent(group, translation) {
+    if (!group.textNodes || group.textNodes.length === 0) {
+      return;
+    }
+
+    const container = group.container;
+
+    if (this.translatedElements.has(container)) {
+      return;
+    }
+
+    if (!this.originalTexts.has(container)) {
+      this.originalTexts.set(container, container.innerHTML);
+    }
+
+    // Sanitize translation text to prevent XSS while preserving HTML tags
+    const sanitizedTranslation = this.sanitizeHtml(translation.translation || translation);
+
+    // Replace the entire container's innerHTML with the sanitized translation
+    // This preserves HTML tags while preventing XSS
+    container.innerHTML = sanitizedTranslation;
+
+    this.translatedElements.add(container);
   }
 
 
@@ -52,7 +99,7 @@ class TranslationRenderer {
    * Render single translation result immediately (real-time rendering)
    */
   renderSingleResult(result, mode = null) {
-    if (!result.success || !result.textNodes) {
+    if (!result.success) {
       return;
     }
 
@@ -64,18 +111,22 @@ class TranslationRenderer {
     try {
       const actualMode = mode !== null ? mode : this.translationMode;
 
-      // 确保模式有效，默认使用替换模式以保持向后兼容
       const validMode = [TRANSLATION_MODES.REPLACE, TRANSLATION_MODES.BILINGUAL].includes(actualMode)
         ? actualMode
         : TRANSLATION_MODES.REPLACE;
 
       if (validMode === TRANSLATION_MODES.REPLACE) {
-        result.textNodes.forEach(textNode => {
-          // Additional validation before processing
-          if (textNode.node && textNode.node.parentElement) {
-            this.replaceTextContent(textNode, result.translation);
-          }
-        });
+        // Handle paragraph group result
+        if (result.container && result.textNodes) {
+          this.replaceParagraphGroupContent(result, result);
+        } else if (result.textNodes) {
+          // Handle individual text nodes
+          result.textNodes.forEach(textNode => {
+            if (textNode.node && textNode.node.parentElement) {
+              this.replaceTextContent(textNode, result.translation);
+            }
+          });
+        }
       } else if (validMode === TRANSLATION_MODES.BILINGUAL) {
         this.ensureBilingualStyles();
         this.createParagraphBilingualDisplay(result);
@@ -134,13 +185,13 @@ class TranslationRenderer {
     const node = textNode.node;
     const parent = node.parentElement;
 
+    // Skip if already processed to prevent duplicate translations
+    if (this.translatedElements.has(node) || this.translatedElements.has(parent)) {
+      return;
+    }
+
     // Special handling for option elements in replace mode
     if (parent && parent.tagName && parent.tagName.toLowerCase() === 'option') {
-      // Skip if already processed
-      if (this.translatedElements.has(parent)) {
-        return;
-      }
-
       // Store original text for restoration
       if (!this.originalTexts.has(parent)) {
         this.originalTexts.set(parent, parent.textContent);
@@ -225,10 +276,22 @@ class TranslationRenderer {
       return String(text || '');
     }
 
-    // Remove HTML tags and decode HTML entities
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = text;
-    return tempDiv.textContent || tempDiv.innerText || '';
+    // First, try to extract text content using DOM parsing
+    try {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = text;
+
+      // Get text content and clean up extra whitespace
+      let cleanText = tempDiv.textContent || tempDiv.innerText || '';
+
+      // Remove excessive whitespace and normalize
+      cleanText = cleanText.replace(/\s+/g, ' ').trim();
+
+      return cleanText;
+    } catch (error) {
+      // Fallback: use regex to remove HTML tags
+      return text.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    }
   }
 
   /**

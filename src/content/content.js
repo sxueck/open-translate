@@ -341,43 +341,18 @@ async function handleTranslateRequest(options = {}) {
 
           // 存储翻译结果以便后续操作
           if (result.success) {
-            result.textNodes.forEach((textNode, index) => {
-              currentTextNodes.push(textNode);
-
-              if (result.textNodes.length === 1) {
-                // Single text node in paragraph - use full translation
-                currentTranslations.push(result.translation);
-              } else {
-                // Multiple text nodes in paragraph - distribute translation proportionally
-                const nodeTextLength = textNode.text.length;
-                const totalTextLength = result.originalText.length;
-                const proportion = nodeTextLength / totalTextLength;
-
-                // Calculate position in translation based on text node position
-                let currentPosition = 0;
-                for (let i = 0; i < index; i++) {
-                  currentPosition += result.textNodes[i].text.length / totalTextLength;
-                }
-
-                const startPos = Math.floor(currentPosition * result.translation.length);
-                const endPos = Math.floor((currentPosition + proportion) * result.translation.length);
-
-                let nodeTranslation = result.translation.substring(startPos, endPos).trim();
-
-                // Ensure we have some translation text
-                if (!nodeTranslation) {
-                  nodeTranslation = result.translation;
-                }
-
-                currentTranslations.push(nodeTranslation);
-              }
-            });
+            // For paragraph groups, store the entire group result
+            // The renderer will handle the proper replacement
+            currentTextNodes.push(result);
+            currentTranslations.push(result.translation);
           } else {
             // Handle failed translations - keep original text
-            result.textNodes.forEach(textNode => {
-              currentTextNodes.push(textNode);
-              currentTranslations.push(textNode.text);
-            });
+            if (result.textNodes) {
+              result.textNodes.forEach(textNode => {
+                currentTextNodes.push(textNode);
+                currentTranslations.push(textNode.text);
+              });
+            }
           }
 
         } catch (renderError) {

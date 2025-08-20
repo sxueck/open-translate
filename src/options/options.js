@@ -17,11 +17,49 @@ async function initialize() {
     // Load current settings
     await loadSettings();
 
+    // Initialize models if needed
+    await initializeModelsIfNeeded();
+
     // Set up event listeners
     setupEventListeners();
   } catch (error) {
     errorHandler.handle(error, 'options-initialize');
     showStatusMessage(ERROR_MESSAGES.TRANSLATION_FAILED, 'error');
+  }
+}
+
+/**
+ * Initialize models if needed (first time setup)
+ */
+async function initializeModelsIfNeeded() {
+  try {
+    const apiUrl = elements.apiUrl.value.trim();
+    const apiKey = elements.apiKey.value.trim();
+
+    // Check if we have valid API configuration
+    if (!apiUrl || !apiKey) {
+      return;
+    }
+
+    // Check if models are already cached and valid
+    const isCacheValid = await configManager.isModelCacheValid(apiUrl);
+    if (isCacheValid) {
+      return;
+    }
+
+    // Fetch and cache models in background
+    try {
+      const models = await fetchAvailableModels(apiUrl, apiKey);
+      await configManager.saveAvailableModels(models, apiUrl);
+
+      // Reload models in UI
+      await loadAvailableModels();
+    } catch (error) {
+      console.warn('Failed to initialize models:', error);
+    }
+
+  } catch (error) {
+    console.warn('Model initialization error:', error);
   }
 }
 
@@ -46,7 +84,6 @@ function initializeElements() {
   elements.testResult = document.getElementById('testResult');
   
 
-  
   // Advanced Settings
   elements.smartContentEnabled = document.getElementById('smartContentEnabled');
   elements.inputFieldListenerEnabled = document.getElementById('inputFieldListenerEnabled');
@@ -83,7 +120,11 @@ async function loadSettings() {
     const translationConfig = config.translationConfig;
     elements.apiUrl.value = translationConfig.apiUrl;
     elements.apiKey.value = translationConfig.apiKey || '';
+
+    // Load models first, then set the selected model
+    await loadAvailableModels();
     elements.model.value = translationConfig.model;
+
     elements.customModel.value = translationConfig.customModel || '';
     elements.temperature.value = translationConfig.temperature;
     elements.temperatureValue.textContent = elements.temperature.value;
@@ -301,6 +342,73 @@ function updateModelSelectionUI() {
 }
 
 /**
+ * Load available models from storage or fetch from API
+ */
+async function loadAvailableModels() {
+  const modelSelect = elements.model;
+  const currentValue = modelSelect.value;
+
+  try {
+    // Try to load from storage first
+    const storedModels = await configManager.loadAvailableModels();
+
+    if (storedModels && storedModels.models && storedModels.models.length > 0) {
+      populateModelSelect(storedModels.models);
+
+      // Restore selection if it still exists
+      if (Array.from(modelSelect.options).some(opt => opt.value === currentValue)) {
+        modelSelect.value = currentValue;
+      }
+      return;
+    }
+
+    // If no stored models, try to fetch from API if credentials are available
+    const apiUrl = elements.apiUrl.value.trim();
+    const apiKey = elements.apiKey.value.trim();
+
+    if (apiUrl && apiKey) {
+      const models = await fetchAvailableModels(apiUrl, apiKey);
+      await configManager.saveAvailableModels(models, apiUrl);
+      populateModelSelect(models);
+
+      // Restore selection if it still exists
+      if (Array.from(modelSelect.options).some(opt => opt.value === currentValue)) {
+        modelSelect.value = currentValue;
+      }
+    } else {
+      // Show empty state with instruction
+      modelSelect.innerHTML = '<option value="">Please configure API settings and refresh models</option>';
+    }
+
+  } catch (error) {
+    console.warn('Failed to load models:', error);
+    modelSelect.innerHTML = '<option value="">Failed to load models</option>';
+  }
+}
+
+/**
+ * Populate model select with options
+ */
+function populateModelSelect(models) {
+  const modelSelect = elements.model;
+  modelSelect.innerHTML = '';
+
+  if (models && models.length > 0) {
+    models.forEach(model => {
+      const option = document.createElement('option');
+      option.value = model.id;
+      option.textContent = model.owned_by ? `${model.name} (${model.owned_by})` : model.name;
+      modelSelect.appendChild(option);
+    });
+  } else {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No models available';
+    modelSelect.appendChild(option);
+  }
+}
+
+/**
  * Fetch available models from API
  */
 async function fetchAvailableModels(apiUrl, apiKey) {
@@ -334,11 +442,7 @@ async function fetchAvailableModels(apiUrl, apiKey) {
     }
   } catch (error) {
     errorHandler.handle(error, 'options-fetch-models', { suppressNotification: true });
-    return [
-      { id: API_DEFAULTS.MODEL, name: 'GPT-3.5 Turbo', owned_by: 'openai' },
-      { id: 'gpt-4', name: 'GPT-4', owned_by: 'openai' },
-      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', owned_by: 'openai' }
-    ];
+    throw error;
   }
 }
 
@@ -361,40 +465,17 @@ async function refreshAvailableModels() {
       throw new ConfigurationError(ERROR_MESSAGES.API_KEY_MISSING);
     }
 
-    // Fetch models directly from API
-    const models = await fetchAvailableModels(apiUrl, apiKey);
-
     // Save current selection
     const currentValue = modelSelect.value;
 
-    // Get all current default options (GPT and Claude models)
-    const defaultOptions = Array.from(modelSelect.options).filter(option =>
-      option.value.startsWith('gpt-') || option.value.startsWith('claude-')
-    );
+    // Fetch models directly from API
+    const models = await fetchAvailableModels(apiUrl, apiKey);
 
-    // Clear all options
-    modelSelect.innerHTML = '';
+    // Save models to storage
+    await configManager.saveAvailableModels(models, apiUrl);
 
-    // Add default options back
-    defaultOptions.forEach(option => {
-      modelSelect.appendChild(option.cloneNode(true));
-    });
-
-    // Add separator if we have API models
-    if (models.length > 0) {
-      const separator = document.createElement('option');
-      separator.disabled = true;
-      separator.textContent = '--- Available Models ---';
-      modelSelect.appendChild(separator);
-
-      // Add API models
-      models.forEach(model => {
-        const option = document.createElement('option');
-        option.value = model.id;
-        option.textContent = `${model.name} (${model.owned_by})`;
-        modelSelect.appendChild(option);
-      });
-    }
+    // Populate the select with new models
+    populateModelSelect(models);
 
     // Restore selection if it still exists
     if (Array.from(modelSelect.options).some(opt => opt.value === currentValue)) {

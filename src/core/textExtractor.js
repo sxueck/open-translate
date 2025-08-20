@@ -538,7 +538,7 @@ class TextExtractor {
     const paragraphGroups = new Map();
 
     textNodes.forEach(textNode => {
-      const paragraph = this.findParagraphContainer(textNode.parent);
+      const paragraph = this.findParagraphContainer(textNode.parent, options);
       const paragraphId = this.getElementId(paragraph);
 
       if (!paragraphGroups.has(paragraphId)) {
@@ -642,7 +642,7 @@ class TextExtractor {
   /**
    * Find paragraph container for concurrent translation
    */
-  findParagraphContainer(element) {
+  findParagraphContainer(element, options = {}) {
     let current = element;
 
     // Special handling for option elements - they are their own containers
@@ -660,12 +660,53 @@ class TextExtractor {
     while (current && current !== document.body) {
       const tagName = current.tagName.toLowerCase();
       if (paragraphElements.includes(tagName)) {
+        if (options.translationMode === 'replace' && !this.isSafeContainerForReplace(current)) {
+          current = current.parentElement;
+          continue;
+        }
         return current;
       }
       current = current.parentElement;
     }
 
     return element;
+  }
+
+  isSafeContainerForReplace(container) {
+    if (!container) return false;
+
+    const interactiveElements = container.querySelectorAll(
+      'button, input, select, textarea, form, a[href], [onclick]'
+    );
+
+    if (interactiveElements.length > 0) {
+      return false;
+    }
+
+    // 检查容器本身的data属性
+    for (const attr of container.attributes) {
+      if (attr.name.startsWith('data-')) {
+        return false;
+      }
+    }
+
+    const className = container.className || '';
+    const dangerousClassPatterns = [
+      /js-/, /react-/, /vue-/, /ng-/, /ember-/, /backbone-/,
+      /component/, /widget/, /interactive/, /clickable/, /btn/, /button/,
+      /header/, /nav/, /menu/, /toolbar/, /sidebar/
+    ];
+
+    if (dangerousClassPatterns.some(pattern => pattern.test(className))) {
+      return false;
+    }
+
+    const id = container.id || '';
+    if (dangerousClassPatterns.some(pattern => pattern.test(id))) {
+      return false;
+    }
+
+    return true;
   }
 
   /**

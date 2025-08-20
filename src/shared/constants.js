@@ -23,7 +23,8 @@ const STORAGE_KEYS = {
   INPUT_FIELD_ALT_KEY: 'inputFieldAltKey',
   INPUT_FIELD_SHIFT_KEY: 'inputFieldShiftKey',
   AUTO_DETECT_PAGE_LANGUAGE: 'autoDetectPageLanguage',
-  DEFAULT_TARGET_LANGUAGE: 'defaultTargetLanguage'
+  DEFAULT_TARGET_LANGUAGE: 'defaultTargetLanguage',
+  AVAILABLE_MODELS: 'availableModels'
 };
 
 // Language mappings

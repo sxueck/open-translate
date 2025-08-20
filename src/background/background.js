@@ -199,8 +199,6 @@ async function handleModeSwitch(mode, tab) {
       throw new Error(`Invalid translation mode: ${mode}`);
     }
 
-
-
     await chrome.storage.sync.set({ translationMode: mode });
 
     chrome.contextMenus.update('mode-replace', { checked: mode === TRANSLATION_MODES.REPLACE });

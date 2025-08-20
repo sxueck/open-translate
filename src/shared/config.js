@@ -44,7 +44,8 @@ class ConfigManager {
       'shortTextThreshold',
       'maxMergedLength',
       'maxMergedCount',
-      'smartContentEnabled'
+      'smartContentEnabled',
+      'availableModels'
     ];
   }
 
@@ -196,7 +197,7 @@ class ConfigManager {
    */
   async getComponentConfig(component) {
     const fullConfig = await this.loadConfig();
-    
+
     switch (component) {
       case 'translator':
         return {
@@ -220,6 +221,50 @@ class ConfigManager {
       default:
         return fullConfig;
     }
+  }
+
+  /**
+   * Save available models to storage
+   */
+  async saveAvailableModels(models, apiUrl) {
+    const modelData = {
+      models: models,
+      lastUpdated: Date.now(),
+      apiUrl: apiUrl
+    };
+    await chrome.storage.sync.set({ availableModels: modelData });
+    return modelData;
+  }
+
+  /**
+   * Load available models from storage
+   */
+  async loadAvailableModels() {
+    return new Promise((resolve) => {
+      chrome.storage.sync.get(['availableModels'], (result) => {
+        resolve(result.availableModels || null);
+      });
+    });
+  }
+
+  /**
+   * Check if stored models are still valid
+   */
+  async isModelCacheValid(apiUrl, maxAge = 24 * 60 * 60 * 1000) {
+    const modelData = await this.loadAvailableModels();
+    if (!modelData) return false;
+
+    const isUrlMatch = modelData.apiUrl === apiUrl;
+    const isNotExpired = (Date.now() - modelData.lastUpdated) < maxAge;
+
+    return isUrlMatch && isNotExpired;
+  }
+
+  /**
+   * Clear stored models
+   */
+  async clearAvailableModels() {
+    await chrome.storage.sync.remove(['availableModels']);
   }
 }
 

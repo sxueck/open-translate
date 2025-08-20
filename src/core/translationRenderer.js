@@ -83,12 +83,15 @@ class TranslationRenderer {
       this.originalTexts.set(container, container.innerHTML);
     }
 
-    // Sanitize translation text to prevent XSS while preserving HTML tags
-    const sanitizedTranslation = this.sanitizeHtml(translation.translation || translation);
+    const translationText = translation.translation || translation;
+    const cleanTranslation = this.stripHtmlTags(translationText);
 
-    // Replace the entire container's innerHTML with the sanitized translation
-    // This preserves HTML tags while preventing XSS
-    container.innerHTML = sanitizedTranslation;
+    if (this.isSafeForInnerHTMLReplacement(container)) {
+      const sanitizedTranslation = this.sanitizeHtml(translationText);
+      container.innerHTML = sanitizedTranslation;
+    } else {
+      this.replaceTextNodesInContainer(group.textNodes, cleanTranslation);
+    }
 
     this.translatedElements.add(container);
   }
@@ -260,6 +263,10 @@ class TranslationRenderer {
       return;
     }
 
+    if (!this.isSafeForTextReplacement(parent)) {
+      return;
+    }
+
     // Ensure translation is plain text only (strip any HTML tags)
     const cleanTranslation = this.stripHtmlTags(translation);
 
@@ -291,6 +298,168 @@ class TranslationRenderer {
     } catch (error) {
       // Fallback: use regex to remove HTML tags
       return text.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  // 统一的安全检查配置
+  static SECURITY_CONFIG = {
+    DANGEROUS_ELEMENTS: [
+      'button', 'input', 'select', 'textarea', 'form', 'script', 'style', 'iframe', 'object', 'embed'
+    ],
+    DANGEROUS_ATTRIBUTES: ['onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset'],
+    DANGEROUS_CLASS_PATTERNS: [
+      /js-/, /react-/, /vue-/, /ng-/, /ember-/, /backbone-/,
+      /component/, /widget/, /interactive/, /clickable/, /btn/, /button/,
+      /header/, /nav/, /menu/, /toolbar/, /sidebar/
+    ],
+    // 完整的ARIA属性列表，用于无障碍功能检查
+    SAFE_ARIA_ATTRIBUTES: [
+      'aria-label', 'aria-labelledby', 'aria-describedby', 'aria-expanded', 'aria-hidden',
+      'aria-live', 'aria-atomic', 'aria-relevant', 'aria-busy', 'aria-disabled',
+      'aria-readonly', 'aria-required', 'aria-invalid', 'aria-checked', 'aria-selected',
+      'aria-pressed', 'aria-level', 'aria-setsize', 'aria-posinset', 'aria-orientation',
+      'aria-sort', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext',
+      'role'
+    ],
+    // 危险的ARIA属性（可能影响功能）
+    DANGEROUS_ARIA_ATTRIBUTES: [
+      'aria-controls', 'aria-owns', 'aria-activedescendant', 'aria-flowto'
+    ]
+  };
+
+  /**
+   * 检查元素属性是否安全
+   */
+  _checkElementAttributes(element, allowDataAttributes, allowAriaAttributes) {
+    for (const attr of element.attributes) {
+      const attrName = attr.name;
+
+      if (attrName.startsWith('on')) {
+        return false;
+      }
+
+      if (attrName.startsWith('data-') && !allowDataAttributes) {
+        return false;
+      }
+
+      if (attrName.startsWith('aria-') || attrName === 'role') {
+        if (!allowAriaAttributes) {
+          return false;
+        }
+        if (TranslationRenderer.SECURITY_CONFIG.DANGEROUS_ARIA_ATTRIBUTES.includes(attrName)) {
+          return false;
+        }
+        if (!TranslationRenderer.SECURITY_CONFIG.SAFE_ARIA_ATTRIBUTES.includes(attrName)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 检查元素类名和ID是否安全
+   */
+  _checkElementIdentifiers(element) {
+    const className = element.className || '';
+    const id = element.id || '';
+
+    return !TranslationRenderer.SECURITY_CONFIG.DANGEROUS_CLASS_PATTERNS.some(pattern =>
+      pattern.test(className) || pattern.test(id)
+    );
+  }
+
+  /**
+   * 统一的安全检查方法
+   */
+  isSafeForReplacement(element, options = {}) {
+    if (!element) return false;
+
+    const {
+      checkChildren = false,
+      allowDataAttributes = false,
+      allowAriaAttributes = true,
+      checkInnerHTML = false
+    } = options;
+
+    // 检查元素标签
+    const tagName = element.tagName.toLowerCase();
+    if (TranslationRenderer.SECURITY_CONFIG.DANGEROUS_ELEMENTS.includes(tagName)) {
+      return false;
+    }
+
+    // 检查危险的子元素
+    if (checkInnerHTML) {
+      const dangerousElements = element.querySelectorAll(
+        TranslationRenderer.SECURITY_CONFIG.DANGEROUS_ELEMENTS.join(', ') +
+        ', [onclick], [onload], [class*="js-"], [id*="js-"]'
+      );
+      if (dangerousElements.length > 0) {
+        return false;
+      }
+    }
+
+    // 检查属性
+    if (!this._checkElementAttributes(element, allowDataAttributes, allowAriaAttributes)) {
+      return false;
+    }
+
+    // 检查类名和ID
+    if (!this._checkElementIdentifiers(element)) {
+      return false;
+    }
+
+    // 检查是否有子元素
+    if (checkChildren && element.children?.length > 0) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * 检查是否安全进行innerHTML替换
+   */
+  isSafeForInnerHTMLReplacement(container) {
+    return this.isSafeForReplacement(container, {
+      checkInnerHTML: true,
+      allowDataAttributes: false,
+      allowAriaAttributes: true
+    });
+  }
+
+  /**
+   * 检查是否安全进行文本替换
+   */
+  isSafeForTextReplacement(element) {
+    return this.isSafeForReplacement(element, {
+      checkChildren: true,
+      allowDataAttributes: false,
+      allowAriaAttributes: true
+    });
+  }
+
+  replaceTextNodesInContainer(textNodes, translationText) {
+    if (!textNodes || textNodes.length === 0) return;
+
+    if (textNodes.length === 1) {
+      const textNode = textNodes[0];
+      if (textNode.node && textNode.node.nodeType === Node.TEXT_NODE) {
+        textNode.node.textContent = translationText;
+      }
+      return;
+    }
+
+    const firstTextNode = textNodes[0];
+    if (firstTextNode.node && firstTextNode.node.nodeType === Node.TEXT_NODE) {
+      firstTextNode.node.textContent = translationText;
+    }
+
+    for (let i = 1; i < textNodes.length; i++) {
+      const textNode = textNodes[i];
+      if (textNode.node && textNode.node.nodeType === Node.TEXT_NODE) {
+        textNode.node.textContent = '';
+      }
     }
   }
 
@@ -467,7 +636,7 @@ class TranslationRenderer {
     const staleElements = [];
     for (const element of this.translatedElements) {
       if (!document.contains(element)) {
-        staleElements.add(element);
+        staleElements.push(element);
       }
     }
 
@@ -1010,39 +1179,7 @@ class TranslationRenderer {
     `;
   }
 
-  /**
-   * 获取最佳无衬线字体栈
-   */
-  getOptimalSansSerifFont() {
-    const userAgent = navigator.userAgent;
-    const language = navigator.language || 'en';
 
-    // 针对中文环境优化字体栈
-    if (language.startsWith('zh')) {
-      return `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Source Han Sans SC', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', sans-serif`;
-    }
-
-    // 根据系统和语言环境选择最佳字体
-    if (language.startsWith('zh')) {
-      // 中文环境
-      if (userAgent.includes('Mac')) {
-        return `'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', sans-serif`;
-      } else if (userAgent.includes('Windows')) {
-        return `'Microsoft YaHei', 'Segoe UI', 'SimHei', sans-serif`;
-      } else {
-        return `'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Micro Hei', sans-serif`;
-      }
-    } else if (language.startsWith('ja')) {
-      // 日文环境
-      return `'Hiragino Kaku Gothic ProN', 'Noto Sans CJK JP', 'Yu Gothic', 'Meiryo', sans-serif`;
-    } else if (language.startsWith('ko')) {
-      // 韩文环境
-      return `'Apple SD Gothic Neo', 'Noto Sans CJK KR', 'Malgun Gothic', sans-serif`;
-    } else {
-      // 西文环境
-      return `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif`;
-    }
-  }
 
   /**
    * 生成对比度调整样式
@@ -1124,27 +1261,7 @@ class TranslationRenderer {
     `;
   }
 
-  /**
-   * 获取用于缓存的纯文本翻译结果
-   * 确保缓存中只存储纯文本，双语模式需要重新计算样式
-   */
-  getTranslationForCache(translation) {
-    // 如果是HTML内容，提取纯文本
-    if (typeof translation === 'string' && translation.includes('<')) {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = translation;
-      return tempDiv.textContent || tempDiv.innerText || translation;
-    }
-    return translation;
-  }
 
-  /**
-   * 检查是否需要重新计算双语样式
-   * 双语模式下即使有缓存也需要重新应用样式
-   */
-  shouldRecalculateBilingualStyles(mode) {
-    return mode === 'paragraph-bilingual';
-  }
 
   /**
    * Create bilingual display for option elements

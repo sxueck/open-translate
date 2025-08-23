@@ -247,34 +247,38 @@ class TranslationService {
    */
   buildSystemPrompt(targetLang, options = {}) {
     const baseInstructions = [
-      `You are a professional ${targetLang} native translator with excellent language skills and cultural understanding.`,
+      `You are an expert ${targetLang} translator with native-level fluency and deep cultural understanding.`,
       '',
-      '## Translation Principles',
-      '1. PRIORITY: Create natural, fluent translations that sound like they were originally written in ${targetLang}',
-      '2. Avoid literal word-for-word translations - prioritize natural expression over strict structural adherence',
-      '3. Use idiomatic expressions and natural sentence patterns of the target language',
-      '4. Adapt cultural references and concepts to be understandable in the target culture',
-      '5. Maintain the original meaning and intent, but express it in the most natural way possible',
+      '## Core Translation Principles',
+      '1. NATURALNESS: Create translations that sound native, using natural phrasing and idiomatic expressions',
+      '2. MEANING PRESERVATION: Accurately convey the original meaning while adapting to cultural context',
+      '3. READABILITY: Ensure the translation flows smoothly and is easy to understand',
+      '4. TERMINOLOGY: Maintain consistent terminology based on context',
+      '5. TONE: Preserve the original tone (formal/informal) and style',
       '',
-      '## Output Requirements',
-      '6. Output only the translated content, without explanations or additional content',
-      '7. Maintain the same number of paragraphs and overall structure as the original',
-      '8. For technical terms, proper nouns, and brand names, keep them unchanged when appropriate',
-      '9. Choose the most contextually appropriate translation for ambiguous terms',
-      '10. Maintain consistency in terminology throughout the text',
-      '11. Preserve the original tone and register (formal, informal, technical, casual)'
+      '## Quality Priorities',
+      '6. Prioritize natural expression over literal translation',
+      '7. Adapt cultural references appropriately for the target audience',
+      '8. Maintain logical flow and coherence',
+      '9. Ensure technical accuracy for specialized content',
+      '',
+      '## Output Guidelines',
+      '10. Return only the translated content (no explanations)',
+      '11. Maintain paragraph structure when appropriate',
+      '12. For HTML content: Preserve tags but focus on natural text translation',
+      '13. For technical terms: Use standard translations when available',
+      '14. For names/places: Use common translations when they exist'
     ];
 
     if (options.translationMode === TRANSLATION_MODES.REPLACE) {
-      baseInstructions.push('12. Return only plain text translation without any HTML tags, markup, or formatting');
-      baseInstructions.push('13. If the input contains HTML tags, extract and translate only the text content, ignoring all HTML markup');
-      baseInstructions.push('14. CRITICAL: Do not repeat the translation multiple times - provide only one clean translation per input');
+      baseInstructions.push('15. Return clean plain text without HTML tags or formatting');
+      baseInstructions.push('16. Extract and translate only the meaningful text content');
+      baseInstructions.push('17. Provide one clear translation without repetition');
     } else if (this.containsHtmlTags(options.text || text)) {
-      baseInstructions.push('12. The text contains HTML tags. Preserve ALL HTML tags, attributes, and structure EXACTLY as they appear');
-      baseInstructions.push('13. Only translate the text content within HTML tags, never translate tag names, attribute names, or attribute values');
-      baseInstructions.push('14. Maintain the exact same HTML structure, nesting, and tag order in the translation');
-      baseInstructions.push('15. Preserve all attributes including href, class, title, data-*, aria-*, etc.');
-      baseInstructions.push('16. Do not add, remove, or modify any HTML tags or attributes');
+      baseInstructions.push('15. For HTML content: Focus on natural text translation while preserving structure');
+      baseInstructions.push('16. Translate text content naturally, maintain HTML tags for functionality');
+      baseInstructions.push('17. Keep essential attributes (href, class, title) but prioritize readable translation');
+      baseInstructions.push('18. Ensure the translation flows naturally within the HTML structure');
     }
 
     // Add context awareness section
@@ -298,7 +302,8 @@ class TranslationService {
     // 对用户输入的文本进行基本的安全检查
     const sanitizedText = this.sanitizeTranslationText(text);
 
-    return `Translate to ${targetLang} (output translation only):
+    return `Please translate the following text to ${targetLang}.
+Provide a natural, fluent translation that reads well in the target language:
 
 ${sanitizedText}`;
   }

@@ -102,7 +102,10 @@ function initializeElements() {
   elements.shortTextThreshold = document.getElementById('shortTextThreshold');
   elements.maxMergedLength = document.getElementById('maxMergedLength');
   elements.maxMergedCount = document.getElementById('maxMergedCount');
-  
+
+  // Smart Batching Settings
+  elements.enableSmartBatching = document.getElementById('enableSmartBatching');
+
   // Actions
   elements.saveSettings = document.getElementById('saveSettings');
   elements.resetSettings = document.getElementById('resetSettings');
@@ -170,6 +173,11 @@ async function loadSettings() {
       elements.maxMergedCount.value = config.maxMergedCount || 10;
     }
 
+    // Smart Batching Settings
+    if (elements.enableSmartBatching) {
+      elements.enableSmartBatching.checked = config.enableSmartBatching !== false; // Default to true
+    }
+
     // Update model selection UI
     updateModelSelectionUI();
   } catch (error) {
@@ -209,6 +217,8 @@ function setupEventListeners() {
   // Status message close
   const statusClose = elements.statusMessage.querySelector('.status-close');
   statusClose.addEventListener('click', hideStatusMessage);
+
+
 }
 
 /**
@@ -547,7 +557,9 @@ async function saveSettings() {
       enableMerge: elements.enableMerge ? elements.enableMerge.checked : true,
       shortTextThreshold: elements.shortTextThreshold ? parseInt(elements.shortTextThreshold.value) : 50,
       maxMergedLength: elements.maxMergedLength ? parseInt(elements.maxMergedLength.value) : 1000,
-      maxMergedCount: elements.maxMergedCount ? parseInt(elements.maxMergedCount.value) : 10
+      maxMergedCount: elements.maxMergedCount ? parseInt(elements.maxMergedCount.value) : 10,
+      // Smart Batching Settings
+      enableSmartBatching: elements.enableSmartBatching ? elements.enableSmartBatching.checked : true
     };
 
     await configManager.saveConfig(settings);
@@ -596,6 +608,8 @@ function showStatusMessage(message, type = 'success') {
 function hideStatusMessage() {
   elements.statusMessage.classList.add('hidden');
 }
+
+
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', initialize);

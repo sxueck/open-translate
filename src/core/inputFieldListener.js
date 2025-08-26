@@ -27,6 +27,7 @@ class InputFieldListener {
     this.animationElement = null;
     this.pageLanguage = null;
     this.languageDetectionCache = new Map();
+    this.lastTriggerTime = 0; // 防止重复触发的时间戳
 
     // 绑定方法
     this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -180,16 +181,11 @@ class InputFieldListener {
    * 附加事件监听器
    */
   attachEventListeners() {
-    // 使用事件委托监听所有输入元素，同时在捕获和冒泡阶段都监听
     document.addEventListener('keydown', this.handleKeyDown, true);
-    document.addEventListener('keydown', this.handleKeyDown, false);
     document.addEventListener('focus', this.handleFocus, true);
     document.addEventListener('blur', this.handleBlur, true);
     document.addEventListener('input', this.handleInput, true);
     document.addEventListener('contextmenu', this.handleContextMenu, true);
-
-    // 额外监听 window 级别的键盘事件，确保不会遗漏
-    window.addEventListener('keydown', this.handleKeyDown, true);
   }
 
   /**
@@ -197,14 +193,10 @@ class InputFieldListener {
    */
   detachEventListeners() {
     document.removeEventListener('keydown', this.handleKeyDown, true);
-    document.removeEventListener('keydown', this.handleKeyDown, false);
     document.removeEventListener('focus', this.handleFocus, true);
     document.removeEventListener('blur', this.handleBlur, true);
     document.removeEventListener('input', this.handleInput, true);
     document.removeEventListener('contextmenu', this.handleContextMenu, true);
-
-    // 移除 window 级别的监听器
-    window.removeEventListener('keydown', this.handleKeyDown, true);
   }
 
   /**
@@ -215,6 +207,12 @@ class InputFieldListener {
 
     // 检查是否按下了触发键组合
     if (this.isTriggerKeyPressed(event)) {
+      const currentTime = Date.now();
+      if (currentTime - this.lastTriggerTime < 100) {
+        return;
+      }
+      this.lastTriggerTime = currentTime;
+
       // 获取当前焦点元素或事件目标
       const targetElement = document.activeElement || event.target;
 
@@ -520,18 +518,20 @@ class InputFieldListener {
   async triggerTranslation() {
     if (!this.currentInputElement || this.isTranslating) return;
 
+    // 立即设置翻译状态以防止竞态条件
+    this.isTranslating = true;
+
     const text = this.getInputText(this.currentInputElement);
 
-    // 验证文本内容
     if (!this.isValidText(text)) {
       console.log('[InputFieldListener] Text validation failed:', { text, length: text?.length });
+      this.isTranslating = false; // 重置状态
       return;
     }
 
     console.log('[InputFieldListener] Starting translation:', { text: text.substring(0, 50) + '...', length: text.length });
 
     try {
-      this.isTranslating = true;
 
       // 显示翻译动画
       this.showTranslationAnimation();

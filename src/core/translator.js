@@ -3,16 +3,58 @@
  */
 class TranslationService {
   constructor() {
+    const apiDefaults = getAPIDefaults();
+
     this.defaultConfig = {
-      apiUrl: 'https://api.openai.com/v1/chat/completions',
+      apiUrl: apiDefaults.URL,
       apiKey: '',
-      model: 'gpt-3.5-turbo',
+      model: apiDefaults.MODEL,
       customModel: '',
-      temperature: 0.5,
-      maxTokens: 2000,
-      timeout: 30000
+      temperature: apiDefaults.TEMPERATURE,
+      maxTokens: apiDefaults.MAX_TOKENS,
+      timeout: apiDefaults.TIMEOUT
     };
     this.availableModels = [];
+
+    // 初始化批处理组件
+    this.tokenCalculator = null;
+    this.smartBatchProcessor = null;
+    this.initializeSmartBatching();
+  }
+
+  /**
+   * 初始化批处理组件
+   */
+  async initializeSmartBatching() {
+    try {
+      // 动态加载批处理组件
+      if (typeof tokenCalculator !== 'undefined') {
+        this.tokenCalculator = tokenCalculator;
+      }
+
+      if (typeof SmartBatchProcessor !== 'undefined' && this.tokenCalculator) {
+        this.smartBatchProcessor = new SmartBatchProcessor(this.tokenCalculator);
+      }
+    } catch (error) {
+      console.warn('Smart batching components not available, falling back to traditional batching');
+    }
+  }
+
+  /**
+   * 统一的系统提示词token计算方法
+   * 避免在多个地方重复计算
+   */
+  calculateSystemPromptTokens(targetLanguage, options = {}) {
+    const systemPrompt = this.buildSystemPrompt(LANGUAGE_MAP[targetLanguage] || targetLanguage, options);
+    return this.tokenCalculator ? this.tokenCalculator.calculateTokens(systemPrompt) : 200;
+  }
+
+  /**
+   * 计算合并组系统提示词的token数量
+   */
+  calculateMergedGroupSystemPromptTokens(targetLanguage, options = {}) {
+    const systemPrompt = this.buildMergedGroupSystemPrompt(LANGUAGE_MAP[targetLanguage] || targetLanguage, options);
+    return this.tokenCalculator ? this.tokenCalculator.calculateTokens(systemPrompt) : 200;
   }
 
   /**
@@ -162,7 +204,36 @@ class TranslationService {
     const enhancedOptions = await this.enhanceTranslationOptions(options, text);
     console.log('[TranslationService] Enhanced options prepared');
 
-    const prompt = this.buildTranslationPrompt(text, targetLanguage, sourceLanguage, enhancedOptions);
+    // 检查文本长度和token限制
+    const systemPromptTokens = this.calculateSystemPromptTokens(targetLanguage, enhancedOptions);
+    const textTokens = this.tokenCalculator ? this.tokenCalculator.calculateTokens(text) : Math.ceil(text.length / 4);
+    const totalInputTokens = systemPromptTokens + textTokens + 50; // 50 for user prompt overhead
+    const defaultMaxTokens = getAPIDefault('MAX_TOKENS', 8000);
+    const maxInputTokens = Math.floor((this.config.maxTokens || defaultMaxTokens) * 0.5);
+
+    console.log('[TranslationService] Token analysis:', {
+      systemPromptTokens,
+      textTokens,
+      totalInputTokens,
+      maxInputTokens,
+      textLength: text.length
+    });
+
+    let processedText = text;
+    if (totalInputTokens > maxInputTokens) {
+      console.warn('[TranslationService] Text exceeds token limit, truncating...');
+      const availableTokens = maxInputTokens - systemPromptTokens - 50;
+      processedText = this.tokenCalculator ?
+        this.tokenCalculator.truncateTextToTokenLimit(text, availableTokens) :
+        text.substring(0, Math.floor(availableTokens * 3)); // 粗略估算
+
+      console.log('[TranslationService] Text truncated:', {
+        originalLength: text.length,
+        truncatedLength: processedText.length
+      });
+    }
+
+    const prompt = this.buildTranslationPrompt(processedText, targetLanguage, sourceLanguage, enhancedOptions);
     console.log('[TranslationService] Translation prompt built, length:', prompt?.length);
 
     try {
@@ -899,13 +970,229 @@ Translations:`;
    * Translate paragraph groups with concurrent processing and merge optimization
    */
   async translateParagraphGroups(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null, options = {}) {
+    // 检查是否启用智能批处理
+    const enableSmartBatching = this.config.enableSmartBatching !== false && this.smartBatchProcessor;
     const enableMerge = this.config.enableMerge !== false; // Default to true
 
-    if (enableMerge) {
+    if (enableSmartBatching) {
+      return await this.translateParagraphGroupsWithSmartBatching(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options);
+    } else if (enableMerge) {
       return await this.translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options);
     } else {
       return await this.translateParagraphGroupsIndividually(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options);
     }
+  }
+
+  /**
+   * 使用智能批处理策略翻译段落组
+   */
+  async translateParagraphGroupsWithSmartBatching(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options = {}) {
+    if (!this.smartBatchProcessor) {
+      // 回退到传统合并策略
+      return await this.translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options);
+    }
+
+    const totalGroups = paragraphGroups.length;
+    let processedCount = 0;
+
+    try {
+      // 计算系统提示词的token数量
+      const systemPromptTokens = this.calculateSystemPromptTokens(targetLanguage, options);
+
+      console.log('[TranslationService] System prompt tokens calculated:', {
+        systemPromptTokens,
+        maxTokens: this.config.maxTokens,
+        systemPromptLength: systemPrompt.length
+      });
+
+      // 使用智能批处理器创建批次
+      const batchResult = await this.smartBatchProcessor.processTextSegments(paragraphGroups, {
+        maxTokens: this.config.maxTokens || getAPIDefault('MAX_TOKENS', 8000),
+        systemPromptTokens: systemPromptTokens
+      });
+
+      const results = [];
+
+      // 处理每个批次
+      for (const batch of batchResult.batches) {
+        try {
+          let batchResults;
+
+          if (batch.length === 1) {
+            // 单个项目直接翻译
+            batchResults = await this.translateSingleGroup(batch[0], targetLanguage, sourceLanguage, options);
+          } else {
+            // 多个项目合并翻译
+            batchResults = await this.translateSmartBatch(batch, targetLanguage, sourceLanguage, options);
+          }
+
+          // 处理批次结果
+          for (const result of batchResults) {
+            results.push(result);
+            processedCount++;
+
+            if (progressCallback) {
+              progressCallback(result, processedCount, totalGroups);
+            }
+          }
+
+        } catch (error) {
+          console.warn('[SmartBatching] Batch failed, falling back to individual translation:', error);
+
+          // 回退到逐个翻译
+          const fallbackResults = await this.fallbackToIndividualGroupTranslation(batch, targetLanguage, sourceLanguage, progressCallback);
+          results.push(...fallbackResults);
+          processedCount += batch.length;
+        }
+      }
+
+      // 按原始顺序排序
+      results.sort((a, b) => a.batchIndex - b.batchIndex);
+
+      return results;
+
+    } catch (error) {
+      console.warn('[SmartBatching] Smart batching failed, falling back to traditional merge strategy:', error);
+      return await this.translateParagraphGroupsWithMerge(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options);
+    }
+  }
+
+  /**
+   * 翻译单个组
+   */
+  async translateSingleGroup(group, targetLanguage, sourceLanguage, options = {}) {
+    const startTime = Date.now();
+
+    const translation = await this.translateText(
+      group.combinedText,
+      targetLanguage,
+      sourceLanguage,
+      options
+    );
+
+    const processingTime = Date.now() - startTime;
+
+    return [{
+      id: group.id,
+      container: group.container,
+      textNodes: group.textNodes,
+      originalText: group.combinedText,
+      translation: translation,
+      success: true,
+      batchIndex: group.batchIndex !== undefined ? group.batchIndex : group.originalIndex || 0,
+      processingTime: processingTime,
+      htmlContent: group.htmlContent || '',
+      batchType: 'smart_single'
+    }];
+  }
+
+  /**
+   * 翻译智能批次
+   */
+  async translateSmartBatch(batch, targetLanguage, sourceLanguage, options = {}) {
+    const mergedPrompt = this.buildSmartBatchTranslationPrompt(batch, targetLanguage, options);
+    const response = await this.makeAPIRequest(mergedPrompt);
+    const mergedTranslation = this.extractTranslation(response);
+
+    return this.splitSmartBatchTranslation(batch, mergedTranslation);
+  }
+
+  /**
+   * 构建智能批次翻译提示词
+   */
+  buildSmartBatchTranslationPrompt(batch, targetLang, options = {}) {
+    const systemPrompt = this.buildSmartBatchSystemPrompt(targetLang, options);
+    const userPrompt = this.buildSmartBatchUserPrompt(batch, targetLang);
+
+    return `${systemPrompt}\n\n${userPrompt}`;
+  }
+
+  /**
+   * 构建智能批次系统提示词
+   */
+  buildSmartBatchSystemPrompt(targetLang, options = {}) {
+    const baseInstructions = [
+      `You are a professional ${targetLang} native translator with exceptional linguistic skills and cultural understanding.`,
+      '',
+      '## Smart Batch Translation Principles',
+      '1. CONSISTENCY: Maintain consistent terminology and style across all segments in the batch',
+      '2. CONTEXT AWARENESS: Consider the relationship between segments for better translation quality',
+      '3. NATURAL FLOW: Ensure each translation reads naturally while maintaining coherence with others',
+      '4. PRECISION: Accurately convey the meaning of each segment while optimizing for batch coherence',
+      '5. EFFICIENCY: Provide high-quality translations that leverage the batch context',
+      '',
+      '## Output Format Requirements',
+      '- Translate each numbered segment separately',
+      '- Maintain the exact numbering format: "1. [translation]", "2. [translation]", etc.',
+      '- Each translation should be on its own line',
+      '- Do not add explanations, notes, or additional text',
+      '- Preserve any HTML tags or special formatting within the text',
+      ''
+    ];
+
+    // 添加语言特定指令
+    const specificInstructions = this.getLanguageSpecificInstructions(targetLang);
+
+    return [...baseInstructions, ...specificInstructions].join('\n');
+  }
+
+  /**
+   * 构建智能批次用户提示词
+   */
+  buildSmartBatchUserPrompt(batch, targetLang) {
+    // 创建编号的文本段落
+    const numberedTexts = batch.map((group, index) =>
+      `${index + 1}. ${group.combinedText || group.text || ''}`
+    ).join('\n');
+
+    return `Translate the following ${batch.length} text segments to ${targetLang}:
+
+${numberedTexts}
+
+Translations:`;
+  }
+
+  /**
+   * 拆分智能批次翻译结果
+   */
+  splitSmartBatchTranslation(batch, mergedTranslation) {
+    const lines = mergedTranslation.split('\n').filter(line => line.trim());
+    const results = [];
+
+    for (let i = 0; i < batch.length; i++) {
+      const group = batch[i];
+      let translation = '';
+
+      // 查找对应编号的翻译
+      const expectedPrefix = `${i + 1}.`;
+      const matchingLine = lines.find(line => line.trim().startsWith(expectedPrefix));
+
+      if (matchingLine) {
+        translation = matchingLine.substring(matchingLine.indexOf('.') + 1).trim();
+      } else if (lines[i]) {
+        // 回退：按行号匹配
+        translation = lines[i].replace(/^\d+\.\s*/, '').trim();
+      } else {
+        // 最后回退：使用原文
+        translation = group.combinedText || group.text || '';
+        console.warn(`[SmartBatching] Failed to extract translation for segment ${i + 1}, using original text`);
+      }
+
+      results.push({
+        id: group.id,
+        container: group.container,
+        textNodes: group.textNodes,
+        originalText: group.combinedText || group.text || '',
+        translation: translation,
+        success: !!translation,
+        batchIndex: group.batchIndex !== undefined ? group.batchIndex : group.originalIndex || i,
+        htmlContent: group.htmlContent || '',
+        batchType: 'smart_merged',
+        batchSize: batch.length
+      });
+    }
+
+    return results;
   }
 
   /**
@@ -1090,23 +1377,46 @@ Translations:`;
     const batches = [];
     let currentBatch = [];
     let currentLength = 0;
+    let currentTokens = 0;
+
+    // 计算系统提示词token数量
+    const systemPromptTokens = this.calculateMergedGroupSystemPromptTokens('zh-CN', {});
+    const defaultMaxTokens = getAPIDefault('MAX_TOKENS', 8000);
+    const maxInputTokens = Math.floor((this.config.maxTokens || defaultMaxTokens) * 0.5); // 为输出预留50%空间
+
+    console.log('[TranslationService] Creating merged group batches with token limits:', {
+      systemPromptTokens,
+      maxInputTokens,
+      maxMergedLength: config.maxMergedLength,
+      maxMergedCount: config.maxMergedCount
+    });
 
     for (const group of shortGroups) {
       const groupLength = group.combinedText.length;
+      const groupTokens = this.tokenCalculator ? this.tokenCalculator.calculateTokens(group.combinedText) : Math.ceil(groupLength / 4);
 
-      // Check if adding this group would exceed limits
-      if (currentBatch.length >= config.maxMergedCount ||
-          currentLength + groupLength > config.maxMergedLength) {
+      // 检查是否超过任何限制
+      const wouldExceedCount = currentBatch.length >= config.maxMergedCount;
+      const wouldExceedLength = currentLength + groupLength > config.maxMergedLength;
+      const wouldExceedTokens = systemPromptTokens + currentTokens + groupTokens > maxInputTokens;
 
-        if (currentBatch.length > 0) {
-          batches.push(currentBatch);
-          currentBatch = [];
-          currentLength = 0;
-        }
+      if ((wouldExceedCount || wouldExceedLength || wouldExceedTokens) && currentBatch.length > 0) {
+        console.log('[TranslationService] Creating batch due to limits:', {
+          batchSize: currentBatch.length,
+          currentLength,
+          currentTokens: systemPromptTokens + currentTokens,
+          reason: wouldExceedCount ? 'count' : wouldExceedLength ? 'length' : 'tokens'
+        });
+
+        batches.push(currentBatch);
+        currentBatch = [];
+        currentLength = 0;
+        currentTokens = 0;
       }
 
       currentBatch.push(group);
       currentLength += groupLength;
+      currentTokens += groupTokens;
     }
 
     // Add remaining batch
@@ -1130,10 +1440,38 @@ Translations:`;
    * Build prompt for merged group translation
    */
   buildMergedGroupTranslationPrompt(batch, targetLang, options = {}) {
-    const systemPrompt = this.buildMultipleSystemPrompt(targetLang, options);
+    const systemPrompt = this.buildMergedGroupSystemPrompt(targetLang, options);
     const userPrompt = this.buildMultipleUserPrompt(batch, targetLang);
 
     return `${systemPrompt}\n\n${userPrompt}`;
+  }
+
+  /**
+   * Build system prompt for merged group translation
+   */
+  buildMergedGroupSystemPrompt(targetLang, options = {}) {
+    const baseInstructions = [
+      `You are an expert ${targetLang} translator with native-level fluency and deep cultural understanding.`,
+      '',
+      '## Core Translation Principles',
+      '1. NATURALNESS: Create translations that sound native, using natural phrasing and idiomatic expressions',
+      '2. MEANING PRESERVATION: Accurately convey the original meaning while adapting to cultural context',
+      '3. READABILITY: Ensure the translation flows smoothly and is easy to understand',
+      '4. TERMINOLOGY: Maintain consistent terminology based on context',
+      '5. TONE: Preserve the original tone (formal/informal) and style',
+      '',
+      '## Output Guidelines',
+      '6. Return only the translated content (no explanations)',
+      '7. Maintain paragraph structure when appropriate',
+      '8. For HTML content: Preserve tags but focus on natural text translation',
+      '9. Maintain consistency in terminology across all segments',
+      '10. Ensure excellent flow and natural expression in ${targetLang}'
+    ];
+
+    // Add language-specific instructions
+    const specificInstructions = this.getLanguageSpecificInstructions(targetLang);
+
+    return [...baseInstructions, ...specificInstructions].join('\n');
   }
 
   /**

@@ -76,7 +76,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="maxTokens" class="form-label">Max Tokens</label>
-              <input type="number" id="maxTokens" class="form-input" min="100" max="4000" value="2000">
+              <input type="number" id="maxTokens" class="form-input" min="1500" max="16000" value="8000">
             </div>
 
             <div class="form-group">
@@ -192,6 +192,19 @@
             <label for="retryAttempts" class="form-label">Retry Attempts</label>
             <input type="number" id="retryAttempts" class="form-input" min="0" max="5" value="2">
             <small class="form-help">Number of retry attempts for failed translations</small>
+          </div>
+
+          <!-- Smart Batching Configuration -->
+          <div class="form-section">
+            <h3 class="form-section-title">Smart Batching Optimization</h3>
+
+            <div class="form-group">
+              <label class="form-label">
+                <input type="checkbox" id="enableSmartBatching" class="form-checkbox">
+                Enable Smart Batching
+              </label>
+              <small class="form-help">Use intelligent token-based batching to minimize API calls and maximize efficiency</small>
+            </div>
           </div>
         </div>
       </section>

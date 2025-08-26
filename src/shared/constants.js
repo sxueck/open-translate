@@ -60,9 +60,31 @@ const API_DEFAULTS = {
   URL: 'https://api.openai.com/v1/chat/completions',
   MODEL: 'gpt-3.5-turbo',
   TEMPERATURE: 0.5,
-  MAX_TOKENS: 2000,
+  MAX_TOKENS: 8000,
   TIMEOUT: 30000
 };
+
+/**
+ * 获取API默认配置的统一方法
+ * 避免在多个地方重复typeof检查
+ */
+function getAPIDefaults() {
+  return (typeof API_DEFAULTS !== 'undefined') ? API_DEFAULTS : {
+    URL: 'https://api.openai.com/v1/chat/completions',
+    MODEL: 'gpt-3.5-turbo',
+    TEMPERATURE: 0.5,
+    MAX_TOKENS: 8000,
+    TIMEOUT: 30000
+  };
+}
+
+/**
+ * 获取特定API默认值的便捷方法
+ */
+function getAPIDefault(key, fallback = null) {
+  const defaults = getAPIDefaults();
+  return defaults[key] !== undefined ? defaults[key] : fallback;
+}
 
 // Performance constants
 const PERFORMANCE = {
@@ -202,7 +224,7 @@ const CSS_CLASSES = {
 // Validation limits
 const VALIDATION_LIMITS = {
   TEMPERATURE: { min: 0, max: 2 },
-  MAX_TOKENS: { min: 1, max: 4000 },
+  MAX_TOKENS: { min: 1500, max: 16000 },
   TIMEOUT: { min: 5000, max: 120000 },
   BATCH_SIZE: { min: 1, max: 20 },
   RETRY_ATTEMPTS: { min: 0, max: 5 },
@@ -228,7 +250,9 @@ if (typeof module !== 'undefined' && module.exports) {
     MESSAGE_ACTIONS,
     TRANSLATION_STATUS,
     CSS_CLASSES,
-    VALIDATION_LIMITS
+    VALIDATION_LIMITS,
+    getAPIDefaults,
+    getAPIDefault
   };
 } else if (typeof window !== 'undefined') {
   Object.assign(window, {
@@ -246,6 +270,8 @@ if (typeof module !== 'undefined' && module.exports) {
     MESSAGE_ACTIONS,
     TRANSLATION_STATUS,
     CSS_CLASSES,
-    VALIDATION_LIMITS
+    VALIDATION_LIMITS,
+    getAPIDefaults,
+    getAPIDefault
   });
 }

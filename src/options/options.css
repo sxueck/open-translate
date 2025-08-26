@@ -546,4 +546,17 @@ body {
     background: #2d2d2d;
     border-color: #444;
   }
+
+  .analysis-result {
+    background: #2d2d2d;
+    border-left-color: #007bff;
+  }
+
+  .analysis-result .recommendation {
+    background: #3d3d3d;
+    border-color: #555;
+    color: #e0e0e0;
+  }
 }
+
+

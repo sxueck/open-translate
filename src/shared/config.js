@@ -12,7 +12,7 @@ class ConfigManager {
         model: 'gpt-3.5-turbo',
         customModel: '',
         temperature: 0.5,
-        maxTokens: 2000,
+        maxTokens: getAPIDefault('MAX_TOKENS', 8000),
         timeout: 30000
       },
       translationMode: TRANSLATION_MODES.REPLACE,
@@ -27,7 +27,9 @@ class ConfigManager {
       shortTextThreshold: 50,
       maxMergedLength: 1000,
       maxMergedCount: 10,
-      smartContentEnabled: true
+      smartContentEnabled: true,
+      // 智能批处理配置
+      enableSmartBatching: true
     };
 
     this.storageKeys = [
@@ -133,7 +135,9 @@ class ConfigManager {
         tc.temperature = Math.max(0, Math.min(2, parseFloat(tc.temperature) || 0.3));
       }
       if (tc.maxTokens !== undefined) {
-        tc.maxTokens = Math.max(1, Math.min(4000, parseInt(tc.maxTokens) || 2000));
+        // 最小值设为1500，因为系统提示词约占500-600token，需要为输入和输出预留足够空间
+        const defaultMaxTokens = getAPIDefault('MAX_TOKENS', 8000);
+        tc.maxTokens = Math.max(1500, Math.min(16000, parseInt(tc.maxTokens) || defaultMaxTokens));
       }
       if (tc.timeout !== undefined) {
         tc.timeout = Math.max(5000, Math.min(120000, parseInt(tc.timeout) || 30000));
@@ -182,6 +186,11 @@ class ConfigManager {
       validated.translationMode = TRANSLATION_MODES.REPLACE;
     }
 
+    // Validate smart batching configuration
+    if (validated.enableSmartBatching !== undefined) {
+      validated.enableSmartBatching = Boolean(validated.enableSmartBatching);
+    }
+
     return validated;
   }
 
@@ -207,7 +216,9 @@ class ConfigManager {
           enableMerge: fullConfig.enableMerge,
           shortTextThreshold: fullConfig.shortTextThreshold,
           maxMergedLength: fullConfig.maxMergedLength,
-          maxMergedCount: fullConfig.maxMergedCount
+          maxMergedCount: fullConfig.maxMergedCount,
+          // 智能批处理配置
+          enableSmartBatching: fullConfig.enableSmartBatching
         };
       case 'extractor':
         return {

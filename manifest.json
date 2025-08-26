@@ -30,6 +30,8 @@
         "src/core/smartContentExtractor.js",
         "src/core/textExtractor.js",
         "src/core/translationRenderer.js",
+        "src/core/tokenCalculator.js",
+        "src/core/smartBatchProcessor.js",
         "src/core/translator.js",
         "src/core/inputFieldListener.js",
         "src/content/content.js"

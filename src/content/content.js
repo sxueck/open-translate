@@ -138,14 +138,21 @@ async function initializeInputFieldListener() {
   }
 }
 
+// 防止重复添加消息监听器的标志
+let messageListenersSetup = false;
+
 /**
  * Set up message listeners for communication with popup/background
  */
 function setupMessageListeners() {
+  if (messageListenersSetup) return;
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleMessage(message, sender, sendResponse);
     return true; // Keep message channel open for async responses
   });
+
+  messageListenersSetup = true;
 }
 
 /**
@@ -688,9 +695,13 @@ window.addEventListener('popstate', () => {
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initialize);
+  document.addEventListener('DOMContentLoaded', () => {
+    initialize();
+    setupDynamicTranslation();
+  });
 } else {
   initialize();
+  setupDynamicTranslation();
 }
 
 // Set up content observer
@@ -814,13 +825,4 @@ async function performIncrementalTranslation(paragraphGroups) {
   }
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    initialize();
-    setupDynamicTranslation();
-  });
-} else {
-  initialize();
-  setupDynamicTranslation();
-}
+

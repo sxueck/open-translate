@@ -96,8 +96,6 @@ class TranslationRenderer {
     this.translatedElements.add(container);
   }
 
-
-
   /**
    * Render single translation result immediately (real-time rendering)
    */

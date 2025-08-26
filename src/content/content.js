@@ -16,6 +16,8 @@ let isNavigating = false; // 新增：标记是否正在导航
 let currentTextNodes = [];
 let currentTranslations = [];
 let translationMode = TRANSLATION_MODES.REPLACE; // 统一默认为替换模式
+let dynamicTranslationEnabled = true;
+let scrollTimeout = null;
 
 /**
  * Initialize content script
@@ -303,7 +305,8 @@ async function handleTranslateRequest(options = {}) {
       // Use paragraph-based extraction for better concurrent translation
       // Pass translation mode to ensure proper text extraction
       let paragraphGroups = textExtractor.extractParagraphGroups(document.body, {
-        translationMode: translationMode
+        translationMode: translationMode,
+        prioritizeViewport: true // 启用视口优先翻译
       });
 
       if (paragraphGroups.length === 0) {
@@ -629,10 +632,11 @@ function setupContentObserver() {
 
     clearTimeout(window.otContentChangeTimeout);
     window.otContentChangeTimeout = setTimeout(() => {
-      if (isTranslated && !isTranslating) {
-        handleTranslateRequest({ forceRefresh: true }).catch(() => {});
+      if (isTranslated && !isTranslating && dynamicTranslationEnabled) {
+        // 使用动态翻译而不是完全重新翻译
+        handleViewportChange().catch(() => {});
       }
-    }, 1000);
+    }, 500); // 减少延迟以提高响应性
   });
 
   return observer;
@@ -712,3 +716,111 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 });
+
+/**
+ * Setup dynamic translation listeners
+ */
+function setupDynamicTranslation() {
+  if (!dynamicTranslationEnabled) return;
+
+  // 滚动监听 - 当用户滚动时检查新进入视口的元素
+  let scrollTimeout = null;
+  window.addEventListener('scroll', () => {
+    if (!isTranslated || isTranslating) return;
+
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      handleViewportChange();
+    }, 300);
+  }, { passive: true });
+
+  // 窗口大小变化监听
+  window.addEventListener('resize', () => {
+    if (!isTranslated || isTranslating) return;
+
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      handleViewportChange();
+    }, 500);
+  }, { passive: true });
+}
+
+/**
+ * Handle viewport changes for dynamic translation
+ */
+async function handleViewportChange() {
+  if (!textExtractor || !isTranslated || isTranslating) return;
+
+  try {
+    // 查找视口内未翻译的元素
+    const untranslatedGroups = textExtractor.extractParagraphGroups(document.body, {
+      translationMode: translationMode,
+      prioritizeViewport: true
+    }).filter(group => {
+      // 检查是否已经翻译过
+      return !group.container.closest('.ot-bilingual-container, .ot-paragraph-bilingual') &&
+             !group.container.classList.contains('ot-paragraph-bilingual') &&
+             !translationRenderer.translatedElements.has(group.container);
+    });
+
+    if (untranslatedGroups.length === 0) return;
+
+    // 只翻译视口内的元素
+    const viewportGroups = untranslatedGroups.filter(group => {
+      const rect = group.container.getBoundingClientRect();
+      return rect.top < window.innerHeight && rect.bottom > 0;
+    });
+
+    if (viewportGroups.length > 0) {
+      // 进行增量翻译
+      await performIncrementalTranslation(viewportGroups);
+    }
+  } catch (error) {
+    console.warn('Dynamic translation failed:', error);
+  }
+}
+
+/**
+ * Perform incremental translation for new elements
+ */
+async function performIncrementalTranslation(paragraphGroups) {
+  if (isTranslating || paragraphGroups.length === 0) return;
+
+  isTranslating = true;
+
+  try {
+    const progressCallback = async (result, completed, total) => {
+      if (isNavigating) return;
+
+      translationRenderer.renderSingleResult(result, translationMode);
+
+      if (result.success) {
+        currentTextNodes.push(result);
+        currentTranslations.push(result.translation);
+      }
+    };
+
+    await translationService.translateParagraphGroups(
+      paragraphGroups,
+      'zh-CN', // 使用当前目标语言
+      'auto',  // 自动检测源语言
+      progressCallback,
+      { translationMode: translationMode }
+    );
+  } catch (error) {
+    console.warn('Incremental translation failed:', error);
+  } finally {
+    isTranslating = false;
+  }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    initialize();
+    setupDynamicTranslation();
+  });
+} else {
+  initialize();
+  setupDynamicTranslation();
+}

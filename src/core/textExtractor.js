@@ -191,22 +191,15 @@ class TextExtractor {
    */
   extractParagraphGroups(rootElement = document.body, options = {}) {
     const textNodes = this.extractTextNodes(rootElement, options);
-    return this.groupTextNodesByParagraph(textNodes, options);
+    const paragraphGroups = this.groupTextNodesByParagraph(textNodes, options);
+
+    // 如果启用了视口优先翻译，对段落组进行排序
+    if (options.prioritizeViewport !== false) {
+      return this.prioritizeViewportElements(paragraphGroups);
+    }
+
+    return paragraphGroups;
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   /**
    * Create tree walker
@@ -282,21 +275,23 @@ class TextExtractor {
       return true;
     }
 
-    // 检查是否在非内容区域（侧边栏、导航栏等）
-    if (isExcludedElement(node.parentElement, [])) {
+    // 检查元素可见性
+    if (!this.isElementVisible(node.parentElement)) {
       return false;
     }
 
+    // 更宽松的链接文本检查
     const linkParent = node.parentElement.closest('a[href]');
     if (linkParent) {
       const text = node.textContent.trim();
-      if (text.length < 20 && !/[.!?。！？]/.test(text)) {
+      // 降低链接文本的长度要求，允许更多链接文本被翻译
+      if (text.length < 10 && !/[.!?。！？]/.test(text) && !/[\u4e00-\u9fff]/.test(text)) {
         return false;
       }
     }
 
-    // Use shared utility for better performance
-    return !isExcludedElement(node.parentElement, excludeSelectors);
+    // 使用更宽松的排除检查
+    return !this.isStrictlyExcludedElement(node.parentElement, excludeSelectors);
   }
 
   /**
@@ -348,6 +343,152 @@ class TextExtractor {
     }
 
     return false;
+  }
+
+  /**
+   * Check if element is visible to the user
+   */
+  isElementVisible(element) {
+    if (!element) return false;
+
+    // 基本可见性检查
+    if (element.style.display === 'none' ||
+        element.style.visibility === 'hidden' ||
+        element.hasAttribute('hidden') ||
+        element.getAttribute('aria-hidden') === 'true') {
+      return false;
+    }
+
+    // 检查计算样式
+    try {
+      const computedStyle = window.getComputedStyle(element);
+      if (computedStyle.display === 'none' ||
+          computedStyle.visibility === 'hidden' ||
+          computedStyle.opacity === '0') {
+        return false;
+      }
+
+      // 检查元素尺寸
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) {
+        return false;
+      }
+    } catch (e) {
+      // 如果无法获取样式信息，假设元素可见
+      return true;
+    }
+
+    return true;
+  }
+
+  /**
+   * More lenient exclusion check for better coverage
+   */
+  isStrictlyExcludedElement(element, excludeSelectors = []) {
+    if (!element || !element.matches) return true;
+
+    const tagName = element.tagName.toLowerCase();
+
+    // 只排除明确不应翻译的元素
+    const strictExcludeElements = [
+      'script', 'style', 'noscript', 'iframe', 'object', 'embed',
+      'canvas', 'svg', 'math', 'pre', 'kbd', 'samp', 'var'
+    ];
+
+    if (strictExcludeElements.includes(tagName)) {
+      return true;
+    }
+
+    // 检查明确的不翻译标记
+    if (element.matches('[data-translate="no"], .notranslate, [translate="no"]')) {
+      return true;
+    }
+
+    // 检查表单元素
+    if (element.contentEditable === 'true') return true;
+    if (['input', 'textarea', 'button', 'select'].includes(tagName)) return true;
+
+    // 检查用户自定义排除选择器
+    if (excludeSelectors.length > 0) {
+      return excludeSelectors.some(selector => {
+        try {
+          if (selector.startsWith('[') || selector.startsWith('.') || selector.startsWith('#')) {
+            return element.matches(selector);
+          }
+          return tagName === selector;
+        } catch (e) {
+          return false;
+        }
+      });
+    }
+
+    return false;
+  }
+
+  /**
+   * Prioritize elements in viewport for translation
+   */
+  prioritizeViewportElements(paragraphGroups) {
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+
+    // 为每个段落组计算视口优先级
+    const groupsWithPriority = paragraphGroups.map(group => {
+      const element = group.container;
+      let viewportPriority = 0;
+
+      try {
+        const rect = element.getBoundingClientRect();
+
+        // 计算元素与视口的关系
+        if (rect.top < viewportHeight && rect.bottom > 0 &&
+            rect.left < viewportWidth && rect.right > 0) {
+          // 元素在视口内
+          const visibleArea = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0)) *
+                             Math.max(0, Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0));
+          const totalArea = rect.width * rect.height;
+          const visibilityRatio = totalArea > 0 ? visibleArea / totalArea : 0;
+
+          // 视口内元素优先级最高
+          viewportPriority = 1000 + Math.floor(visibilityRatio * 100);
+
+          // 距离视口顶部越近，优先级越高
+          const distanceFromTop = Math.max(0, rect.top);
+          viewportPriority -= Math.floor(distanceFromTop / 100);
+        } else if (rect.top >= 0 && rect.top < viewportHeight * 2) {
+          // 视口下方一屏内的元素
+          viewportPriority = 500 - Math.floor(rect.top / 100);
+        } else if (rect.bottom <= viewportHeight && rect.bottom > -viewportHeight) {
+          // 视口上方一屏内的元素
+          viewportPriority = 300 - Math.floor(Math.abs(rect.bottom) / 100);
+        } else {
+          // 距离视口较远的元素
+          const distance = rect.top > viewportHeight ?
+                          rect.top - viewportHeight :
+                          viewportHeight - rect.bottom;
+          viewportPriority = Math.max(1, 100 - Math.floor(distance / 200));
+        }
+      } catch (e) {
+        // 如果无法获取位置信息，使用默认优先级
+        viewportPriority = 50;
+      }
+
+      return {
+        ...group,
+        viewportPriority: viewportPriority
+      };
+    });
+
+    // 按视口优先级排序，然后按原有优先级排序
+    return groupsWithPriority.sort((a, b) => {
+      if (a.viewportPriority !== b.viewportPriority) {
+        return b.viewportPriority - a.viewportPriority;
+      }
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      return this.getDocumentOrder(a.container) - this.getDocumentOrder(b.container);
+    });
   }
 
 
@@ -746,7 +887,7 @@ class TextExtractor {
   shouldUseHtmlContent(container, plainText, translationMode = null) {
     if (!container || !plainText) return false;
 
-    if (translationMode === TRANSLATION_MODES.REPLACE) {
+    if (translationMode === 'replace') {
       return false;
     }
 

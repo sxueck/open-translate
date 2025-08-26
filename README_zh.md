@@ -32,7 +32,7 @@
 
 ## 安装
 
-当前在 Chrome Store 审核中，如果您想体验最新特性，可以直接从 Release 下载最新版本并通过开发者模式加载
+[Chrome插件安装地址](https://chromewebstore.google.com/detail/open-translate/adjaaffapljffboblagfljfpgpbophon?authuser=0&hl=zh-CN)
 
 ### 开发安装
 

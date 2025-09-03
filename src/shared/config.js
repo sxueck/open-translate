@@ -28,7 +28,6 @@ class ConfigManager {
       maxMergedLength: 1000,
       maxMergedCount: 10,
       smartContentEnabled: true,
-      // 智能批处理配置
       enableSmartBatching: true
     };
 
@@ -217,7 +216,6 @@ class ConfigManager {
           shortTextThreshold: fullConfig.shortTextThreshold,
           maxMergedLength: fullConfig.maxMergedLength,
           maxMergedCount: fullConfig.maxMergedCount,
-          // 智能批处理配置
           enableSmartBatching: fullConfig.enableSmartBatching
         };
       case 'extractor':

@@ -1,6 +1,6 @@
 {
   "name": "open-translate",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "description": "A powerful Chrome browser extension for web page translation with OpenAI API compatibility",
   "main": "src/background/background.js",
   "scripts": {

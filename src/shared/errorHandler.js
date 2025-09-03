@@ -272,6 +272,8 @@ class ErrorHandler {
     };
   }
 
+
+
   /**
    * Wrap function with error handling
    */

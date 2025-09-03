@@ -8,7 +8,18 @@ class TranslationRenderer {
     this.translatedElements = new Set();
     this.styleInjected = false;
 
+    // CSS-based translation system
+    this.cssTranslations = new Map(); // element -> translation data
+    this.translationStyleSheet = null;
+    this.translationCounter = 0;
+
     this.renderedResults = new Set();
+
+    // 失败元素追踪机制
+    this.failedElements = new Map(); // elementId -> failureInfo
+    this.retryQueue = new Map(); // elementId -> retryInfo
+    this.maxRetryAttempts = 3;
+    this.retryDelay = 2000; // 2秒基础延迟
 
     // Performance optimizations
     this.maxCacheSize = 1000;
@@ -33,24 +44,122 @@ class TranslationRenderer {
   }
 
   /**
-   * Render translations in replace mode
+   * Initialize CSS-based translation system
+   */
+  initializeCSSTranslationSystem() {
+    if (this.translationStyleSheet) return;
+
+    // Create a dedicated stylesheet for translations
+    this.translationStyleSheet = document.createElement('style');
+    this.translationStyleSheet.id = 'ot-css-translations';
+    document.head.appendChild(this.translationStyleSheet);
+  }
+
+  /**
+   * Apply CSS-based translation without modifying DOM structure
+   */
+  applyCSSTranslation(element, translation, originalText) {
+    this.initializeCSSTranslationSystem();
+
+    const translationId = `ot-trans-${++this.translationCounter}`;
+    element.setAttribute('data-ot-translation-id', translationId);
+
+    // Store translation data
+    this.cssTranslations.set(element, {
+      id: translationId,
+      original: originalText,
+      translation: translation,
+      applied: true
+    });
+
+    // Add CSS rule to hide original text and show translation
+    const cssRule = `
+      [data-ot-translation-id="${translationId}"] {
+        position: relative !important;
+      }
+
+      [data-ot-translation-id="${translationId}"] * {
+        visibility: hidden !important;
+      }
+
+      [data-ot-translation-id="${translationId}"]::before {
+        content: "${this.escapeCSSContent(translation)}" !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        visibility: visible !important;
+        color: inherit !important;
+        background: transparent !important;
+        font: inherit !important;
+        line-height: inherit !important;
+        text-align: inherit !important;
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+        z-index: 1 !important;
+      }
+    `;
+
+    this.translationStyleSheet.textContent += cssRule;
+    this.translatedElements.add(element);
+  }
+
+  /**
+   * Escape CSS content for safe injection
+   */
+  escapeCSSContent(text) {
+    if (!text) return '';
+
+    return text
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, '\\A ')
+      .replace(/\r/g, '')
+      .replace(/\t/g, '\\9 ');
+  }
+
+
+
+  /**
+   * Render translations in replace mode using CSS overlay method
    */
   renderReplaceMode(textNodes, translations) {
     // 确保在Replace模式下清理任何双语模式残留
     this.cleanupAllBilingualElements();
 
+    // Initialize CSS translation system
+    this.initializeCSSTranslationSystem();
+
     // Check if we're dealing with paragraph groups or individual text nodes
     if (Array.isArray(textNodes) && textNodes.length > 0 && textNodes[0].textNodes) {
-      // Handle paragraph groups
-      this.renderParagraphGroupsReplaceMode(textNodes, translations);
+      // Handle paragraph groups with CSS method
+      this.renderParagraphGroupsCSSMode(textNodes, translations);
     } else {
-      // Handle individual text nodes (legacy mode)
+      // Handle individual text nodes with CSS method
       textNodes.forEach((textNode, index) => {
         if (translations[index] && !translations[index].error) {
           this.replaceTextContent(textNode, translations[index]);
         }
       });
     }
+  }
+
+  /**
+   * Render paragraph groups using CSS overlay method
+   */
+  renderParagraphGroupsCSSMode(paragraphGroups, translations) {
+    paragraphGroups.forEach((group, index) => {
+      const translation = translations[index];
+      if (translation && !translation.error && group.container) {
+        // Use CSS-based translation for the entire container
+        const originalText = group.combinedText || group.container.textContent;
+        this.applyCSSTranslation(group.container, translation.translation || translation, originalText);
+      }
+    });
   }
 
   /**
@@ -110,6 +219,17 @@ class TranslationRenderer {
     }
 
     try {
+      // 检查翻译是否成功
+      if (!result.success) {
+        this.trackFailedElement(result);
+        return;
+      }
+
+      // 如果之前失败过但现在成功了，移除失败追踪
+      if (this.failedElements.has(resultId)) {
+        this.removeFailedElement(resultId);
+      }
+
       const actualMode = mode !== null ? mode : this.translationMode;
 
       const validMode = [TRANSLATION_MODES.REPLACE, TRANSLATION_MODES.BILINGUAL].includes(actualMode)
@@ -136,6 +256,14 @@ class TranslationRenderer {
       this.renderedResults.add(resultId);
 
     } catch (error) {
+      // 渲染失败也要追踪
+      const failedResult = {
+        ...result,
+        success: false,
+        error: error.message,
+        failureReason: `Rendering failed: ${error.message}`
+      };
+      this.trackFailedElement(failedResult);
     }
   }
 
@@ -162,6 +290,225 @@ class TranslationRenderer {
     }
     return Math.abs(hash).toString(36);
   }
+
+  /**
+   * 追踪失败的翻译元素
+   */
+  trackFailedElement(result) {
+    if (!result || !result.container) return;
+
+    const elementId = this.generateResultId(result);
+    if (!elementId) return;
+
+    const failureInfo = {
+      result: result,
+      failureTime: Date.now(),
+      retryCount: result.retryCount || 0,
+      failureReason: result.failureReason || result.error || 'Unknown error',
+      lastRetryTime: result.lastRetryTime || null
+    };
+
+    this.failedElements.set(elementId, failureInfo);
+
+    // 如果还可以重试，添加到重试队列
+    if (failureInfo.retryCount < this.maxRetryAttempts) {
+      this.addToRetryQueue(elementId, failureInfo);
+    }
+  }
+
+  /**
+   * 添加元素到重试队列
+   */
+  addToRetryQueue(elementId, failureInfo) {
+    const retryInfo = {
+      elementId: elementId,
+      failureInfo: failureInfo,
+      nextRetryTime: Date.now() + this.calculateRetryDelay(failureInfo.retryCount),
+      priority: this.calculateRetryPriority(failureInfo)
+    };
+
+    this.retryQueue.set(elementId, retryInfo);
+  }
+
+  /**
+   * 计算重试延迟（指数退避）
+   */
+  calculateRetryDelay(retryCount) {
+    return this.retryDelay * Math.pow(2, retryCount);
+  }
+
+  /**
+   * 计算重试优先级
+   */
+  calculateRetryPriority(failureInfo) {
+    // 基于失败原因和元素重要性计算优先级
+    let priority = 1;
+
+    // 网络错误优先级较高
+    if (failureInfo.failureReason.includes('Network') ||
+        failureInfo.failureReason.includes('timeout')) {
+      priority += 2;
+    }
+
+    // 重试次数越少优先级越高
+    priority += (this.maxRetryAttempts - failureInfo.retryCount);
+
+    return priority;
+  }
+
+  /**
+   * 移除失败元素追踪
+   */
+  removeFailedElement(elementId) {
+    this.failedElements.delete(elementId);
+    this.retryQueue.delete(elementId);
+  }
+
+  /**
+   * 获取可重试的元素列表
+   */
+  getRetryableElements() {
+    const now = Date.now();
+    const retryable = [];
+
+    for (const [, retryInfo] of this.retryQueue) {
+      if (now >= retryInfo.nextRetryTime) {
+        retryable.push(retryInfo);
+      }
+    }
+
+    // 按优先级排序
+    return retryable.sort((a, b) => b.priority - a.priority);
+  }
+
+  /**
+   * 执行失败元素的重试
+   */
+  async retryFailedElements(translationService, targetLanguage = 'zh-CN', sourceLanguage = 'auto') {
+    if (!translationService) {
+      console.warn('[TranslationRenderer] Translation service not provided for retry');
+      return [];
+    }
+
+    const retryableElements = this.getRetryableElements();
+    if (retryableElements.length === 0) {
+      return [];
+    }
+
+    const retryResults = [];
+
+    for (const retryInfo of retryableElements) {
+      try {
+        const result = await this.retryElement(retryInfo, translationService, targetLanguage, sourceLanguage);
+        retryResults.push(result);
+
+        // 添加延迟避免过于频繁的重试
+        if (retryableElements.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } catch (error) {
+        console.warn('[TranslationRenderer] Element retry failed:', error);
+        retryResults.push({
+          elementId: retryInfo.elementId,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    return retryResults;
+  }
+
+  /**
+   * 重试单个元素
+   */
+  async retryElement(retryInfo, translationService, targetLanguage, sourceLanguage) {
+    const { elementId, failureInfo } = retryInfo;
+    const originalResult = failureInfo.result;
+
+    // 更新重试计数和时间
+    const updatedResult = {
+      ...originalResult,
+      retryCount: (originalResult.retryCount || 0) + 1,
+      lastRetryTime: Date.now(),
+      retryStatus: 'retrying'
+    };
+
+    try {
+      // 重新翻译
+      const translation = await translationService.translateText(
+        originalResult.originalText,
+        targetLanguage,
+        sourceLanguage
+      );
+
+      // 创建成功的结果
+      const successResult = {
+        ...updatedResult,
+        translation: translation,
+        success: true,
+        retryStatus: 'success',
+        failureReason: null
+      };
+
+      // 重新渲染
+      this.renderSingleResult(successResult, this.translationMode);
+
+      return {
+        elementId: elementId,
+        success: true,
+        result: successResult
+      };
+
+    } catch (error) {
+      // 重试失败
+      const failedResult = {
+        ...updatedResult,
+        success: false,
+        retryStatus: 'failed',
+        failureReason: error.message
+      };
+
+      // 更新失败追踪
+      this.updateFailedElement(elementId, failedResult);
+
+      console.warn(`[TranslationRenderer] Element retry failed: ${elementId}`, error);
+
+      return {
+        elementId: elementId,
+        success: false,
+        error: error.message,
+        result: failedResult
+      };
+    }
+  }
+
+  /**
+   * 更新失败元素信息
+   */
+  updateFailedElement(elementId, result) {
+    const existingFailure = this.failedElements.get(elementId);
+    if (!existingFailure) return;
+
+    const updatedFailureInfo = {
+      ...existingFailure,
+      result: result,
+      retryCount: result.retryCount,
+      lastRetryTime: result.lastRetryTime,
+      failureReason: result.failureReason
+    };
+
+    this.failedElements.set(elementId, updatedFailureInfo);
+
+    // 如果还可以重试，更新重试队列
+    if (result.retryCount < this.maxRetryAttempts) {
+      this.addToRetryQueue(elementId, updatedFailureInfo);
+    } else {
+      // 达到最大重试次数，从重试队列中移除
+      this.retryQueue.delete(elementId);
+      console.warn(`[TranslationRenderer] Element reached max retry attempts: ${elementId}`);
+    }
+  }
   /**
    * Ensure bilingual styles are injected
    */
@@ -180,9 +527,216 @@ class TranslationRenderer {
   }
 
   /**
-   * Replace text content directly (with memory management)
+   * Replace text content using CSS overlay method (React-safe)
    */
   replaceTextContent(textNode, translation) {
+    const node = textNode.node;
+    const parent = node.parentElement;
+
+    // Skip if already processed to prevent duplicate translations
+    if (this.translatedElements.has(node) || this.translatedElements.has(parent)) {
+      return;
+    }
+
+    // Use CSS-based translation for React safety
+    return this.applyCSSBasedTranslation(node, parent, translation);
+  }
+
+  /**
+   * Apply CSS-based translation that doesn't modify DOM structure
+   */
+  applyCSSBasedTranslation(node, parent, translation) {
+    if (!node || !parent || !translation) {
+      return;
+    }
+
+    // Find the best element to apply translation to
+    const targetElement = this.findTranslationTarget(node, parent);
+    if (!targetElement) {
+      return;
+    }
+
+    // Store original text for restoration
+    const originalText = targetElement.textContent;
+    if (!this.originalTexts.has(targetElement)) {
+      this.originalTexts.set(targetElement, originalText);
+    }
+
+    // Apply CSS-based translation
+    this.applyCSSTranslation(targetElement, translation, originalText);
+  }
+
+  /**
+   * Find the best element to apply CSS translation to
+   */
+  findTranslationTarget(textNode, parentElement) {
+    // For text nodes, we need to find a suitable parent element
+    if (textNode.nodeType === Node.TEXT_NODE) {
+      // Check if parent element contains only this text node (or mostly text)
+      const parentText = parentElement.textContent.trim();
+      const nodeText = textNode.textContent.trim();
+
+      // If the parent's text is mostly this text node, use the parent
+      if (parentText === nodeText || parentText.includes(nodeText) && nodeText.length > parentText.length * 0.8) {
+        return parentElement;
+      }
+
+      // Otherwise, we need to wrap the text node
+      return this.wrapTextNodeForTranslation(textNode);
+    }
+
+    return parentElement;
+  }
+
+  /**
+   * Wrap a text node in a span for CSS-based translation
+   */
+  wrapTextNodeForTranslation(textNode) {
+    // Create a wrapper span
+    const wrapper = document.createElement('span');
+    wrapper.className = 'ot-text-wrapper';
+    wrapper.style.display = 'inline';
+
+    // Insert wrapper before the text node
+    textNode.parentNode.insertBefore(wrapper, textNode);
+
+    // Move text node into wrapper
+    wrapper.appendChild(textNode);
+
+    return wrapper;
+  }
+
+  /**
+   * Diagnostic method to check translation system status
+   */
+  diagnoseTranslationSystem() {
+    const diagnosis = {
+      timestamp: new Date().toISOString(),
+      cssTranslationSystemInitialized: !!this.translationStyleSheet,
+      styleSheetInDOM: !!document.getElementById('ot-css-translations'),
+      totalTranslations: this.cssTranslations.size,
+      translatedElements: this.translatedElements.size,
+      renderedResults: this.renderedResults.size,
+      translationMode: this.translationMode,
+      styleSheetContent: this.translationStyleSheet?.textContent?.length || 0
+    };
+
+    // Check for elements with translation IDs
+    const elementsWithTranslationIds = document.querySelectorAll('[data-ot-translation-id]');
+    diagnosis.elementsWithTranslationIds = elementsWithTranslationIds.length;
+
+    // Check CSS rules
+    if (this.translationStyleSheet) {
+      const cssRules = this.translationStyleSheet.textContent.split('}').filter(rule => rule.trim());
+      diagnosis.cssRulesCount = cssRules.length;
+    }
+
+    console.log('[TranslationRenderer] System Diagnosis:', diagnosis);
+
+    // Log sample translation data
+    if (this.cssTranslations.size > 0) {
+      const sampleTranslation = Array.from(this.cssTranslations.entries())[0];
+      console.log('[TranslationRenderer] Sample translation:', {
+        element: sampleTranslation[0].tagName,
+        data: sampleTranslation[1]
+      });
+    }
+
+    return diagnosis;
+  }
+
+  /**
+   * Force refresh all CSS translations
+   */
+  refreshCSSTranslations() {
+    console.log('[TranslationRenderer] Refreshing CSS translations...');
+
+    if (!this.translationStyleSheet) {
+      console.log('[TranslationRenderer] No stylesheet found, initializing...');
+      this.initializeCSSTranslationSystem();
+    }
+
+    // Rebuild all CSS rules
+    let allCssRules = '';
+    this.cssTranslations.forEach((data) => {
+      const cssRule = `
+        [data-ot-translation-id="${data.id}"] {
+          position: relative !important;
+        }
+
+        [data-ot-translation-id="${data.id}"] * {
+          visibility: hidden !important;
+        }
+
+        [data-ot-translation-id="${data.id}"]::before {
+          content: "${this.escapeCSSContent(data.translation)}" !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          visibility: visible !important;
+          color: inherit !important;
+          background: transparent !important;
+          font: inherit !important;
+          line-height: inherit !important;
+          text-align: inherit !important;
+          white-space: pre-wrap !important;
+          word-wrap: break-word !important;
+          overflow: hidden !important;
+          pointer-events: none !important;
+          z-index: 1 !important;
+        }
+      `;
+      allCssRules += cssRule;
+    });
+
+    this.translationStyleSheet.textContent = allCssRules;
+    console.log('[TranslationRenderer] CSS translations refreshed, total rules:', this.cssTranslations.size);
+  }
+
+  /**
+   * Remove all CSS-based translations and restore original appearance
+   */
+  removeCSSTranslations() {
+    // Remove all translation attributes
+    this.cssTranslations.forEach((_, element) => {
+      element.removeAttribute('data-ot-translation-id');
+    });
+
+    // Clear the stylesheet
+    if (this.translationStyleSheet) {
+      this.translationStyleSheet.textContent = '';
+    }
+
+    // Clear translation data
+    this.cssTranslations.clear();
+    this.translatedElements.clear();
+  }
+
+  /**
+   * Check if CSS-based translation is supported for this element
+   */
+  supportsCSSTranslation(element) {
+    if (!element) return false;
+
+    // CSS-based translation works best with block-level elements
+    // or elements that can be positioned
+    const computedStyle = window.getComputedStyle(element);
+    const display = computedStyle.display;
+    const position = computedStyle.position;
+
+    // Works well with block, inline-block, and positioned elements
+    return display !== 'none' &&
+           (display.includes('block') ||
+            display === 'inline-block' ||
+            position !== 'static');
+  }
+
+  /**
+   * Legacy method for special cases that still need DOM modification
+   */
+  legacyReplaceTextContent(textNode, translation) {
     const node = textNode.node;
     const parent = node.parentElement;
 
@@ -642,7 +1196,43 @@ class TranslationRenderer {
       this.translatedElements.delete(element);
     });
 
+    // Clean up failed elements and retry queue
+    this.cleanupFailedElements();
+
     this.lastCleanup = now;
+  }
+
+  /**
+   * 清理失败元素追踪中的过期数据
+   */
+  cleanupFailedElements() {
+    const staleElementIds = [];
+
+    // 检查失败元素是否仍在DOM中
+    for (const [elementId, failureInfo] of this.failedElements) {
+      if (failureInfo.result && failureInfo.result.container) {
+        if (!document.contains(failureInfo.result.container)) {
+          staleElementIds.push(elementId);
+        }
+      }
+    }
+
+    // 移除过期的失败元素
+    staleElementIds.forEach(elementId => {
+      this.removeFailedElement(elementId);
+    });
+
+    // 清理超过最大重试次数的元素
+    const expiredRetries = [];
+    for (const [elementId, retryInfo] of this.retryQueue) {
+      if (retryInfo.failureInfo.retryCount >= this.maxRetryAttempts) {
+        expiredRetries.push(elementId);
+      }
+    }
+
+    expiredRetries.forEach(elementId => {
+      this.retryQueue.delete(elementId);
+    });
   }
 
   /**
@@ -895,10 +1485,13 @@ class TranslationRenderer {
   }
 
   /**
-   * Restore original text content
+   * Restore original text content (CSS-safe method)
    */
   restoreOriginalText() {
-    // Restore bilingual containers to their original HTML content
+    // First, remove all CSS-based translations
+    this.removeCSSTranslations();
+
+    // Then handle any remaining DOM-based translations
     this.originalTexts.forEach((originalContent, element) => {
       if (element.parentElement) {
         // Check if this is a container element (has innerHTML stored)
@@ -935,6 +1528,10 @@ class TranslationRenderer {
     this.originalTexts.clear();
     this.translatedElements.clear();
     this.renderedResults.clear(); // 清理渲染状态跟踪
+
+    // Clear failure tracking data
+    this.failedElements.clear();
+    this.retryQueue.clear();
   }
 
   showOriginalOnly() {
@@ -999,7 +1596,11 @@ class TranslationRenderer {
       paragraphBilingualContainers: document.querySelectorAll('.ot-paragraph-bilingual').length,
       bilingualOptions: document.querySelectorAll('option[data-ot-bilingual="true"]').length,
       mode: this.translationMode,
-      hasOriginalTexts: this.originalTexts.size > 0
+      hasOriginalTexts: this.originalTexts.size > 0,
+      // 失败和重试统计
+      failedElements: this.failedElements.size,
+      retryQueueSize: this.retryQueue.size,
+      retryableElements: this.getRetryableElements().length
     };
   }
 
@@ -1322,6 +1923,8 @@ class TranslationRenderer {
     // Add to translated elements set
     this.translatedElements.add(optionElement);
   }
+
+
 }
 
 // Export for use in other modules
@@ -1329,4 +1932,38 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = TranslationRenderer;
 } else if (typeof window !== 'undefined') {
   window.TranslationRenderer = TranslationRenderer;
+
+  // Expose diagnostic methods globally for debugging
+  window.diagnoseTranslation = function() {
+    if (window.translationRenderer) {
+      return window.translationRenderer.diagnoseTranslationSystem();
+    } else {
+      console.error('Translation renderer not found');
+      return null;
+    }
+  };
+
+  window.refreshTranslations = function() {
+    if (window.translationRenderer) {
+      return window.translationRenderer.refreshCSSTranslations();
+    } else {
+      console.error('Translation renderer not found');
+      return null;
+    }
+  };
+
+  window.checkTranslationElements = function() {
+    const elements = document.querySelectorAll('[data-ot-translation-id]');
+    console.log('Elements with translation IDs:', elements.length);
+    elements.forEach((el, index) => {
+      console.log(`Element ${index + 1}:`, {
+        tag: el.tagName,
+        id: el.id,
+        className: el.className,
+        translationId: el.getAttribute('data-ot-translation-id'),
+        textContent: el.textContent.substring(0, 100) + '...'
+      });
+    });
+    return elements;
+  };
 }

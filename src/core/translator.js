@@ -22,6 +22,15 @@ class TranslationService {
     this.initializeSmartBatching();
   }
 
+  createRetryFields(isSuccess = true, error = null) {
+    return {
+      retryCount: 0,
+      retryStatus: isSuccess ? 'none' : 'pending',
+      lastRetryTime: null,
+      failureReason: isSuccess ? null : (error || 'Unknown error')
+    };
+  }
+
   /**
    * 初始化批处理组件
    */
@@ -40,12 +49,9 @@ class TranslationService {
     }
   }
 
-  /**
-   * 统一的系统提示词token计算方法
-   * 避免在多个地方重复计算
-   */
-  calculateSystemPromptTokens(targetLanguage, options = {}) {
-    const systemPrompt = this.buildSystemPrompt(LANGUAGE_MAP[targetLanguage] || targetLanguage, options);
+
+  calculateSystemPromptTokens(targetLanguage, options = {}, text = '') {
+    const systemPrompt = this.buildSystemPrompt(LANGUAGE_MAP[targetLanguage] || targetLanguage, options, text);
     return this.tokenCalculator ? this.tokenCalculator.calculateTokens(systemPrompt) : 200;
   }
 
@@ -205,7 +211,7 @@ class TranslationService {
     console.log('[TranslationService] Enhanced options prepared');
 
     // 检查文本长度和token限制
-    const systemPromptTokens = this.calculateSystemPromptTokens(targetLanguage, enhancedOptions);
+    const systemPromptTokens = this.calculateSystemPromptTokens(targetLanguage, enhancedOptions, text);
     const textTokens = this.tokenCalculator ? this.tokenCalculator.calculateTokens(text) : Math.ceil(text.length / 4);
     const totalInputTokens = systemPromptTokens + textTokens + 50; // 50 for user prompt overhead
     const defaultMaxTokens = getAPIDefault('MAX_TOKENS', 8000);
@@ -290,7 +296,7 @@ class TranslationService {
     const targetLang = LANGUAGE_MAP[targetLanguage] || targetLanguage;
 
     // Build system and user prompts
-    const systemPrompt = this.buildSystemPrompt(targetLang, options);
+    const systemPrompt = this.buildSystemPrompt(targetLang, options, text);
     const userPrompt = this.buildUserPrompt(text, targetLang);
 
     // Return combined prompt for backward compatibility
@@ -307,7 +313,7 @@ class TranslationService {
    * Build contextual translation prompt with language-specific optimizations
    */
   buildContextualPrompt(text, targetLang, options = {}) {
-    const systemPrompt = this.buildSystemPrompt(targetLang, options);
+    const systemPrompt = this.buildSystemPrompt(targetLang, options, text);
     const userPrompt = this.buildUserPrompt(text, targetLang);
 
     return `${systemPrompt}\n\n${userPrompt}`;
@@ -316,7 +322,7 @@ class TranslationService {
   /**
    * Build system prompt (role definition and rules)
    */
-  buildSystemPrompt(targetLang, options = {}) {
+  buildSystemPrompt(targetLang, options = {}, text = '') {
     const baseInstructions = [
       `You are an expert ${targetLang} translator with native-level fluency and deep cultural understanding.`,
       '',
@@ -951,14 +957,16 @@ Translations:`;
         results.push({
           ...item,
           translation: translation,
-          isMerged: false
+          isMerged: false,
+          ...this.createRetryFields(true)
         });
       } catch (error) {
         results.push({
           ...item,
           translation: item.text,
           error: error.message,
-          isMerged: false
+          isMerged: false,
+          ...this.createRetryFields(false, error.message)
         });
       }
     }
@@ -970,7 +978,7 @@ Translations:`;
    * Translate paragraph groups with concurrent processing and merge optimization
    */
   async translateParagraphGroups(paragraphGroups, targetLanguage = 'zh-CN', sourceLanguage = 'auto', progressCallback = null, options = {}) {
-    // 检查是否启用智能批处理
+    // 检查是否启用批处理
     const enableSmartBatching = this.config.enableSmartBatching !== false && this.smartBatchProcessor;
     const enableMerge = this.config.enableMerge !== false; // Default to true
 
@@ -984,7 +992,7 @@ Translations:`;
   }
 
   /**
-   * 使用智能批处理策略翻译段落组
+   * 使用批处理策略翻译段落组
    */
   async translateParagraphGroupsWithSmartBatching(paragraphGroups, targetLanguage, sourceLanguage, progressCallback, options = {}) {
     if (!this.smartBatchProcessor) {
@@ -997,15 +1005,15 @@ Translations:`;
 
     try {
       // 计算系统提示词的token数量
-      const systemPromptTokens = this.calculateSystemPromptTokens(targetLanguage, options);
+      const sampleText = paragraphGroups.length > 0 ? (paragraphGroups[0].combinedText || paragraphGroups[0].text || '') : '';
+      const systemPromptTokens = this.calculateSystemPromptTokens(targetLanguage, options, sampleText);
 
       console.log('[TranslationService] System prompt tokens calculated:', {
         systemPromptTokens,
-        maxTokens: this.config.maxTokens,
-        systemPromptLength: systemPrompt.length
+        maxTokens: this.config.maxTokens
       });
 
-      // 使用智能批处理器创建批次
+      // 使用批处理器创建批次
       const batchResult = await this.smartBatchProcessor.processTextSegments(paragraphGroups, {
         maxTokens: this.config.maxTokens || getAPIDefault('MAX_TOKENS', 8000),
         systemPromptTokens: systemPromptTokens
@@ -1082,12 +1090,13 @@ Translations:`;
       batchIndex: group.batchIndex !== undefined ? group.batchIndex : group.originalIndex || 0,
       processingTime: processingTime,
       htmlContent: group.htmlContent || '',
-      batchType: 'smart_single'
+      batchType: 'smart_single',
+      ...this.createRetryFields(true)
     }];
   }
 
   /**
-   * 翻译智能批次
+   * 翻译批次
    */
   async translateSmartBatch(batch, targetLanguage, sourceLanguage, options = {}) {
     const mergedPrompt = this.buildSmartBatchTranslationPrompt(batch, targetLanguage, options);
@@ -1098,7 +1107,7 @@ Translations:`;
   }
 
   /**
-   * 构建智能批次翻译提示词
+   * 构建批次翻译提示词
    */
   buildSmartBatchTranslationPrompt(batch, targetLang, options = {}) {
     const systemPrompt = this.buildSmartBatchSystemPrompt(targetLang, options);
@@ -1108,7 +1117,7 @@ Translations:`;
   }
 
   /**
-   * 构建智能批次系统提示词
+   * 构建批次系统提示词
    */
   buildSmartBatchSystemPrompt(targetLang, options = {}) {
     const baseInstructions = [
@@ -1137,7 +1146,7 @@ Translations:`;
   }
 
   /**
-   * 构建智能批次用户提示词
+   * 构建批次用户提示词
    */
   buildSmartBatchUserPrompt(batch, targetLang) {
     // 创建编号的文本段落
@@ -1153,7 +1162,7 @@ Translations:`;
   }
 
   /**
-   * 拆分智能批次翻译结果
+   * 拆分批次翻译结果
    */
   splitSmartBatchTranslation(batch, mergedTranslation) {
     const lines = mergedTranslation.split('\n').filter(line => line.trim());
@@ -1188,7 +1197,8 @@ Translations:`;
         batchIndex: group.batchIndex !== undefined ? group.batchIndex : group.originalIndex || i,
         htmlContent: group.htmlContent || '',
         batchType: 'smart_merged',
-        batchSize: batch.length
+        batchSize: batch.length,
+        ...this.createRetryFields(!!translation, translation ? null : 'Translation failed')
       });
     }
 
@@ -1234,7 +1244,8 @@ Translations:`;
             batchIndex: group.batchIndex !== undefined ? group.batchIndex : i,
             totalGroups: totalGroups,
             processingTime: processingTime,
-            htmlContent: group.htmlContent || ''
+            htmlContent: group.htmlContent || '',
+            ...this.createRetryFields(true)
           };
 
           // Real-time progress callback
@@ -1256,7 +1267,8 @@ Translations:`;
             success: false,
             batchIndex: group.batchIndex !== undefined ? group.batchIndex : i,
             totalGroups: totalGroups,
-            htmlContent: group.htmlContent || ''
+            htmlContent: group.htmlContent || '',
+            ...this.createRetryFields(false, error.message)
           };
 
           if (progressCallback && typeof progressCallback === 'function') {
@@ -1590,7 +1602,8 @@ ${numberedTexts}`;
         totalGroups: batch.length,
         processingTime: 0,
         isMerged: true,
-        htmlContent: group.htmlContent || ''
+        htmlContent: group.htmlContent || '',
+        ...this.createRetryFields(true)
       };
 
       results.push(result);
@@ -1622,7 +1635,8 @@ ${numberedTexts}`;
           totalGroups: batch.length,
           processingTime: processingTime,
           isMerged: false,
-          htmlContent: group.htmlContent || ''
+          htmlContent: group.htmlContent || '',
+          ...this.createRetryFields(true)
         };
 
         results.push(result);
@@ -1641,7 +1655,8 @@ ${numberedTexts}`;
           batchIndex: group.batchIndex,
           totalGroups: batch.length,
           isMerged: false,
-          htmlContent: group.htmlContent || ''
+          htmlContent: group.htmlContent || '',
+          ...this.createRetryFields(false, error.message)
         };
 
         results.push(result);

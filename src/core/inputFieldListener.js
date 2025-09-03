@@ -543,7 +543,7 @@ class InputFieldListener {
 
       console.log('[InputFieldListener] Translation service available, starting translation...');
 
-      // 智能选择目标语言并翻译
+      // 选择目标语言并翻译
       const translation = await this.translateTextWithSmartLanguage(text);
 
       console.log('[InputFieldListener] Translation completed:', {
@@ -576,10 +576,7 @@ class InputFieldListener {
       }
     }
   }
-
-  /**
-   * 智能语言翻译
-   */
+  
   async translateTextWithSmartLanguage(text) {
     if (!this.translationService) {
       throw new Error('Translation service not available');
@@ -649,7 +646,7 @@ class InputFieldListener {
       defaultTargetLanguage: this.options.defaultTargetLanguage
     });
 
-    // 如果没有检测到输入语言，使用智能默认策略
+    // 如果没有检测到输入语言，使用默认策略
     if (!inputLanguage) {
       // 优先使用页面语言，但要确保不是 'auto'
       if (this.pageLanguage && this.pageLanguage !== 'auto') {
